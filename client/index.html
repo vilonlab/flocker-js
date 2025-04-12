@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://unpkg.com/colyseus.js@^0.15.0/dist/colyseus.browser.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+    <style>
+        /* ... (existing styles) ... */
+        #lobby-info { background-color: rgba(0,50,100,0.7); padding: 15px; margin-bottom: 10px; border-radius: 5px;}
+        #player-list { list-style: none; padding: 0; max-height: 100px; overflow-y: auto; }
+        #player-list li { margin-bottom: 3px; }
+        .ready { color: lightgreen; font-weight: bold; }
+        .not-ready { color: orange; }
+        #instructions-panel { background-color: rgba(50, 50, 0, 0.7); padding: 15px; margin-bottom: 10px; border-radius: 5px; }
+        #admin-controls button { background-color: #ffcc00; border: none; color: black;}
+        #readyButton { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        #readyButton.notready { background-color: #ff9800; }
+    </style>
+</head>
+<body>
+    <div id="phaser-game"></div>
+
+    <div id="ui-overlay" style="display: none;">
+        <div id="lobby-info">
+            <h4>Lobby</h4>
+            <p id="lobby-message">Connecting...</p>
+            <ul id="player-list"></ul>
+            <button id="readyButton" class="notready">Ready</button>
+        </div>
+
+         <div id="instructions-panel" style="display: none;">
+              <h4>Instructions</h4>
+              <p id="instructions-text"></p>
+         </div>
+
+
+        <div id="gameplay-info" style="display: none;">
+             <div>Status: <span id="game-status">Starting...</span></div>
+             <div>Round: <span id="round-number">N/A</span></div>
+             <div id="role-info">Role: <span id="player-role">Waiting...</span></div>
+             <div id="target-info" style="display: none;">Target Zone: <span id="target-zone-text">-</span></div>
+         </div>
+
+    </div>
+
+    <div id="timer" style="display: none;">00:00</div>
+     <div id="score" style="display: none;">Score: 0</div>
+    <div id="final-message" style="display: none;">
+        </div>
+    <div id="admin-controls" style="display: none;"> <button id="startGameBtn">Start Experiment</button>
+         <p>Status: <span id="serverStateDisplay">Unknown</span></p>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
