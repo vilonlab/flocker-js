@@ -14,10 +14,10 @@ const PHASES = {
 };
 
 const ZONE_DEFINITIONS = { // Keep definitions consistent
-    Top: { id: 'Top', x: 400, y: 150, radius: 50 },
-    Right: { id: 'Right', x: 650, y: 300, radius: 50 },
-    Bottom: { id: 'Bottom', x: 400, y: 450, radius: 50 },
-    Left: { id: 'Left', x: 150, y: 300, radius: 50 }
+    Top: { id: 'Top', x: 400, y: 150, radius: 100 },
+    Right: { id: 'Right', x: 650, y: 300, radius: 100 },
+    Bottom: { id: 'Bottom', x: 400, y: 450, radius: 100 },
+    Left: { id: 'Left', x: 150, y: 300, radius: 100 }
 };
 const ARENA_CENTER = { x: 400, y: 300 };
 

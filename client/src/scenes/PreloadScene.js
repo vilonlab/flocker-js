@@ -32,63 +32,36 @@ export default class PreloadScene extends Phaser.Scene {
             assetText.destroy();
         });
 
-
         // Load assets
-        this.load.image('player', 'assets/player.png'); // Simple circle sprite for player
-        this.load.image('zone', 'assets/zone.png');     // Simple circle sprite for zone
-
-        // Load emote spritesheet (replace 'emotes.png' with your actual file)
-        // Assuming a 32x32 sprite sheet with 4 frames horizontally: !, +, x, ?
+        this.load.image('player', 'assets/player.png');
+        this.load.image('zone', 'assets/zone.png');
         this.load.spritesheet('emotes', 'assets/emotes.png', {
-             frameWidth: 32, // Adjust to your emote sprite size
-             frameHeight: 32 // Adjust to your emote sprite size
-         });
-
-        // --- Placeholder Asset Creation (if you don't have images yet) ---
-        // Create dynamic textures if files don't exist (useful for quick setup)
-         if (!this.textures.exists('player')) {
-             let graphics = this.make.graphics().fillStyle(0xffffff).fillCircle(10, 10, 10);
-             graphics.generateTexture('player', 20, 20);
-             graphics.destroy();
-             console.log("Generated placeholder 'player' texture.");
-         }
-         if (!this.textures.exists('zone')) {
-            let graphics = this.make.graphics().fillStyle(0xffffff).fillCircle(50, 50, 50); // White circle
-            graphics.lineStyle(2, 0xaaaaaa); // Add a border maybe
-            graphics.strokeCircle(50, 50, 50);
-            graphics.generateTexture('zone', 100, 100);
-            graphics.destroy();
-            console.log("Generated placeholder 'zone' texture.");
-         }
-         if (!this.textures.exists('emotes')) {
-            // Create a dummy spritesheet texture (e.g., 4 colored squares)
-             let graphics = this.make.graphics();
-             graphics.fillStyle(0xff0000).fillRect(0, 0, 32, 32);    // Frame 0 (Red) !
-             graphics.fillStyle(0x00ff00).fillRect(32, 0, 32, 32);   // Frame 1 (Green) +
-             graphics.fillStyle(0x0000ff).fillRect(64, 0, 32, 32);   // Frame 2 (Blue) x
-             graphics.fillStyle(0xffff00).fillRect(96, 0, 32, 32);   // Frame 3 (Yellow) ?
-             graphics.generateTexture('emotes', 128, 32);
-             graphics.destroy();
-             console.log("Generated placeholder 'emotes' spritesheet texture.");
-         }
-         // Ensure the generated textures are loaded if needed elsewhere immediately
-         this.load.image('player');
-         this.load.image('zone');
-         this.load.spritesheet('emotes', { frameWidth: 32, frameHeight: 32 });
-
-
+            frameWidth: 32,
+            frameHeight: 32
+        });
     }
 
     create() {
         console.log("PreloadScene: Create - Starting GameScene.");
-        // Add animations for emotes if using spritesheet
-        // Frame indices correspond to !, +, x, ?
-         this.anims.create({ key: 'emote_!', frames: this.anims.generateFrameNumbers('emotes', { start: 0, end: 0 }) });
-         this.anims.create({ key: 'emote_+', frames: this.anims.generateFrameNumbers('emotes', { start: 1, end: 1 }) });
-         this.anims.create({ key: 'emote_x', frames: this.anims.generateFrameNumbers('emotes', { start: 2, end: 2 }) });
-         this.anims.create({ key: 'emote_?', frames: this.anims.generateFrameNumbers('emotes', { start: 3, end: 3 }) });
+
+        // Add animations for emotes
+        if (this.textures.exists('emotes')) {
+            this.anims.create({ key: 'emote_!', frames: this.anims.generateFrameNumbers('emotes', { start: 0, end: 0 }) });
+            this.anims.create({ key: 'emote_+', frames: this.anims.generateFrameNumbers('emotes', { start: 1, end: 1 }) });
+            this.anims.create({ key: 'emote_x', frames: this.anims.generateFrameNumbers('emotes', { start: 2, end: 2 }) });
+            this.anims.create({ key: 'emote_?', frames: this.anims.generateFrameNumbers('emotes', { start: 3, end: 3 }) });
+        } else {
+            console.error("Emotes texture not found!");
+        }
 
         // Start the main game scene
         this.scene.start('GameScene');
+
+        // Resume AudioContext after user interaction
+        this.input.once('pointerdown', () => {
+            if (this.sound.context.state === 'suspended') {
+                this.sound.context.resume();
+            }
+        });
     }
 }

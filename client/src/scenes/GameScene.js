@@ -1,4 +1,3 @@
-// Ensure Colyseus client is available (loaded via script tag)
 const Colyseus = window.Colyseus;
 
 export default class GameScene extends Phaser.Scene {
@@ -119,182 +118,78 @@ export default class GameScene extends Phaser.Scene {
          }
      }
 
-    async connect() {
+     async connect() {
         try {
-            // Determine server endpoint (handle development vs. production)
-            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-            // Use relative path for same-host deployment, or specific host for dev/different host
-            const endpoint = (process.env.NODE_ENV === 'production')
-                ? `${protocol}://${window.location.host}` // Use same host as webpage on Railway
-                : `${protocol}://localhost:3000`; // Local development default
-
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const endpoint = `${protocol}://${window.location.host}`;
+            
             console.log(`Connecting to Colyseus at ${endpoint}`);
             this.client = new Colyseus.Client(endpoint);
-
+    
             console.log("Attempting to join 'experiment_room'...");
             this.room = await this.client.joinOrCreate('experiment_room');
             this.selfId = this.room.sessionId;
             console.log("Successfully joined room!", this.room.name, "My Session ID:", this.selfId);
-            this.uiOverlay.style.display = 'block'; // Show UI now we are connected
-
+            this.uiOverlay.style.display = 'block';
+    
             this.registerRoomEvents();
-
         } catch (e) {
             console.error("Join Error:", e);
             this.lobbyMessageDisplay.textContent = `Failed to connect: ${e.message}`;
-            // Implement retry logic or display error message permanently
         }
     }
 
     registerRoomEvents() {
         if (!this.room) return;
-
-        // --- State Change Handling ---
-        this.room.onStateChange((state) => {
-            // console.log("State changed:", state); // Debug: Log full state
-             if (!this.selfId) return; // Ensure we have ID before processing player data
-
-            // Update UI based on phase
-            this.updateUIPhase(state.phase, state);
-
-            // Update Timer & Score Display (regardless of phase, if applicable)
-             this.scoreDisplay.textContent = `Score: ${state.score}`;
-             if (state.phase === 'round_active' && state.roundEndTime > 0) {
-                 this.updateTimerDisplay(state.roundEndTime);
-                 this.timerDisplay.style.display = 'block';
-             } else {
-                 this.timerDisplay.style.display = 'none';
-             }
-
-             // Update server status display (admin)
-             if (this.serverStateDisplay) this.serverStateDisplay.textContent = state.phase;
-
-              // Update player list in lobby
-              if (state.phase === 'lobby') {
-                  this.updatePlayerList(state.players);
-              }
-
-            // Initial Zone Drawing (only once)
-            if (Object.keys(this.zoneSprites).length === 0 && state.zones.size > 0) {
-                 state.zones.forEach(zoneData => {
-                     this.drawZone(zoneData);
-                 });
-             }
-
-            // --- Player Updates (Handled by specific listeners below for efficiency) ---
-            // We don't need to iterate through all players on every state change here
-            // unless a property outside the .onAdd/.onRemove/.onChange handlers changes.
-        });
-
-        // --- Player Add/Remove/Change Listeners ---
-        this.room.state.players.onAdd((player, sessionId) => {
-            console.log("Player added:", sessionId, player);
-             // Ensure player sprite doesn't already exist (e.g., due to connection flicker)
-             if (!this.playerSprites[sessionId]) {
-                 this.addPlayerSprite(player, sessionId);
-             } else {
-                 // Update existing sprite if needed
-                 this.updatePlayerSprite(this.playerSprites[sessionId], player);
-             }
-             // Update player list if in lobby phase
-            if (this.room.state.phase === 'lobby') this.updatePlayerList(this.room.state.players);
-        });
-
-        this.room.state.players.onRemove((player, sessionId) => {
-             console.log("Player removed:", sessionId);
-             this.removePlayerSprite(sessionId);
-              // Update player list if in lobby phase
-             if (this.room.state.phase === 'lobby') this.updatePlayerList(this.room.state.players);
-        });
-
-        this.room.state.players.onChange((player, sessionId) => {
-            // console.log("Player changed:", sessionId, player); // Can be noisy
-            const sprite = this.playerSprites[sessionId];
-            if (sprite) {
-                this.updatePlayerSprite(sprite, player);
+    
+        // Wait for the state to be fully initialized
+        this.room.onStateChange.once((state) => {
+            if (!state.players) {
+                console.error("State synchronization failed: 'players' is undefined.");
+                return;
             }
-            // Update player list visuals if in lobby (e.g., ready status changed)
-             if (this.room.state.phase === 'lobby') this.updatePlayerList(this.room.state.players);
+    
+            console.log("State synchronized:", state);
+    
+            // --- Player Add/Remove/Change Listeners ---
+            state.players.onAdd((player, sessionId) => {
+                console.log("Player added:", sessionId, player);
+                if (!this.playerSprites[sessionId]) {
+                    this.addPlayerSprite(player, sessionId);
+                } else {
+                    this.updatePlayerSprite(this.playerSprites[sessionId], player);
+                }
+                if (state.phase === 'lobby') this.updatePlayerList(state.players);
+            });
+    
+            state.players.onRemove((player, sessionId) => {
+                console.log("Player removed:", sessionId);
+                this.removePlayerSprite(sessionId);
+                if (state.phase === 'lobby') this.updatePlayerList(state.players);
+            });
+    
+            state.players.onChange((player, sessionId) => {
+                const sprite = this.playerSprites[sessionId];
+                if (sprite) {
+                    this.updatePlayerSprite(sprite, player);
+                }
+                if (state.phase === 'lobby') this.updatePlayerList(state.players);
+            });
         });
-
-
-        // --- Room Message Handling ---
+    
+        // Handle other room events (e.g., messages, errors)
         this.room.onMessage("isAdmin", (isAdmin) => {
-             console.log(`Received isAdmin status: ${isAdmin}`);
-             this.isAdmin = isAdmin;
-             this.adminControlsPanel.style.display = isAdmin ? 'block' : 'none';
-         });
-
+            console.log(`Received isAdmin status: ${isAdmin}`);
+            this.isAdmin = isAdmin;
+            this.adminControlsPanel.style.display = isAdmin ? 'block' : 'none';
+        });
+    
         this.room.onMessage("error", (message) => {
-             console.error("Server Error Message:", message);
-             // Display error to user? (e.g., using an alert or UI element)
-             alert(`Server Error: ${message}`);
-         });
-
-        this.room.onMessage("roundEndInfo", (data) => {
-            console.log("Received Round End Info:", data);
-             // Update UI with specific round end details
-             this.gameStatusDisplay.textContent = `Round ${data.round} Ended`;
-             // Highlight players etc. can be done here
-              this.highlightPlayersInZone(data.playersInTargetZone); // Assuming function exists
+            console.error("Server Error Message:", message);
+            alert(`Server Error: ${message}`);
         });
-
-         this.room.onMessage("experimentEndInfo", (data) => {
-            console.log("Received Experiment End Info:", data);
-             // Display final message/debrief
-             document.getElementById('final-title').textContent = data.message;
-             document.getElementById('final-score-display').textContent = `Final Score: ${data.finalScore}`;
-             document.getElementById('final-debrief').textContent = data.debrief;
-             document.getElementById('final-thankyou').textContent = "Thank you for participating!";
-             this.finalMessagePanel.style.display = 'block';
-         });
-
-         this.room.onMessage("playerEmoted", (data) => {
-            // Show emote for OTHER players (self already displayed)
-             if (data.id !== this.selfId) {
-                 this.showEmote(data.id, data.emote);
-             }
-        });
-
-        // Handle late join info
-         this.room.onMessage("lateJoinInfo", (data) => {
-             console.log("Joined mid-game. Info:", data);
-             // Update UI immediately based on this data if needed, though onStateChange should also cover it.
-              this.gameStatusDisplay.textContent = `Status: ${data.phase}`;
-              this.roundDisplay.textContent = data.round;
-              this.roleDisplay.textContent = data.role;
-              this.scoreDisplay.textContent = `Score: ${data.score}`;
-              if (data.role === 'informed' && data.targetZone) {
-                 this.targetZoneText.textContent = data.targetZone;
-                 this.targetInfoPanel.style.display = 'block';
-              } else {
-                  this.targetInfoPanel.style.display = 'none';
-              }
-         });
-
-
-        // --- Error Handling ---
-        this.room.onError((code, message) => {
-            console.error("Colyseus room error:", code, message);
-            // Handle potential errors (e.g., display message to user)
-            this.lobbyMessageDisplay.textContent = `Room Error: ${message} (Code: ${code})`;
-        });
-
-        this.room.onLeave((code) => {
-            console.log("Left room.", code);
-             this.playerSprites = {}; // Clear sprites on leave
-             this.zoneSprites = {};
-             this.selfId = null;
-             this.room = null;
-             // Display appropriate message (disconnected, experiment over, etc.)
-              this.uiOverlay.style.display = 'none'; // Hide main UI
-              // Could show a specific "Disconnected" message panel
-              if (code === 1000) { // Normal closure
-                  // Handled by experimentEnd usually
-              } else {
-                  alert(`Disconnected from server (Code: ${code})`);
-              }
-        });
+    
+        // Add other event handlers as needed
     }
 
      updateUIPhase(phase, state) {

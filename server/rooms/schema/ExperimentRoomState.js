@@ -54,6 +54,7 @@ class ExperimentRoomState extends Schema {
         this.score = 0;
         this.instructionText = "Waiting for players to join...";
          this.players = new MapSchema(); // Keyed by client.sessionId
+        console.log("Current players state:", this.players);
          this.zones = new MapSchema(); // Keyed by zone ID ('Top', 'Right', etc.)
          this.lobbyMessage = "Welcome! Please wait for the experiment to begin."; // Message shown in lobby
     }
