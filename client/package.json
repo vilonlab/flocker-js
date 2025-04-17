@@ -10,6 +10,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@colyseus/schema": "^3.0.33",
+    "colyseus.js": "^0.16.15",
     "phaser": "^3.88.2"
   },
   "devDependencies": {
