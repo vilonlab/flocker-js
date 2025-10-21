@@ -1,7 +1,7 @@
 const colyseus = require('colyseus');
 const { ExperimentRoomState, PlayerState, ZoneState } = require('./schema/ExperimentRoomState');
-const DataLogger = require('../dataLogger'); // Assuming dataLogger is compatible or adapted
-const { getRandomColor } = require('../utils'); // Assuming utils is compatible
+const DataLogger = require('../../dataLogger'); // Assuming dataLogger is compatible or adapted
+const { getRandomColor } = require('../../utils'); // Assuming utils is compatible
 
 // Define constants for phases, easier to manage
 const PHASES = {
