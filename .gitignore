@@ -1,3 +1,7 @@
+# Parcel 
+.parcel-cache
+dist
+
 # Node.js dependencies
 node_modules/
 

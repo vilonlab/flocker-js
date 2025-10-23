@@ -2,7 +2,6 @@
   "name": "flocker-phaser",
   "version": "1.0.0",
   "description": "Online experiment for collective decision making",
-  "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "parcel serve index.html",
@@ -11,6 +10,7 @@
   "author": "gus-bradley",
   "license": "ISC",
   "devDependencies": {
+    "parcel": "^2.16.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   },
