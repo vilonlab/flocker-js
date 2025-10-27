@@ -1,5 +1,6 @@
 # Databases
 *.db*
+data/
 
 # Deploy script for development
 pi*
