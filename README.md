@@ -39,8 +39,7 @@ This project implements an online multiplayer experiment using **Phaser.js** (fr
 * Instructions phase before rounds begin.
 * Players move by clicking, emote using keys 1-4.
 * Round-based structure with varying numbers of "informed" players per round.
-* Data logging (player positions, emotes, roles, zone entry) round-by-round to a persistent JSON Lines file (`experiment_data_colyseus.jsonl`).
-* Designed for deployment on Railway (uses `PORT` environment variable, `Procfile`, persistent volume for logs).
+* Data logging (player positions, emotes, roles, zone entry) round-by-round to a persistent sqlite3 database.
 * Optional Colyseus Monitor for debugging server state (if enabled in `server/index.js`).
 * Basic admin controls (start experiment) available to the first player joining the room.
 
@@ -62,9 +61,6 @@ This project implements an online multiplayer experiment using **Phaser.js** (fr
     npm install
     ```
     *(This installs Express, Colyseus, Phaser (via CDN in client), and other necessary packages listed in `package.json`)*
-
-4.  **Assets:** (Optional - Placeholders will be generated if missing)
-    * Place your `player.png`, `zone.png`, and `emotes.png` (e.g., 32x32 frames for `!`,`+`,`x`,`?`) files inside the `client/assets/` directory.
 
 ## Running Locally
 
@@ -89,35 +85,7 @@ This project implements an online multiplayer experiment using **Phaser.js** (fr
     * Press keys 1-4 to emote.
 
 5.  **Data:**
-    * During rounds, data will be logged to `experiment_data_colyseus.jsonl` in the project's root directory when run locally.
-
-## Deployment to Railway
-
-1.  **Create a GitHub Repository:** Push your project code to a new GitHub repository.
-
-2.  **Create a Railway Project:**
-    * Go to [Railway.app](https://railway.app/) and sign up or log in.
-    * Click "New Project" -> "Deploy from GitHub repo".
-    * Select your GitHub repository. Railway will detect the `Node.js` project and `Procfile`.
-
-3.  **Configure Environment Variables (if needed):**
-    * Railway automatically sets the `PORT` variable.
-    * You might set `NODE_ENV=production` to disable the Colyseus monitor on deployment.
-
-4.  **Add a Persistent Volume:**
-    * Go to your service settings in the Railway project dashboard.
-    * Navigate to the "Volumes" tab.
-    * Click "Add Volume".
-    * Set the **Mount Path** to `/data`. This matches the path used in `server/dataLogger.js`. **This is crucial for saving data across deployments/restarts.**
-
-5.  **Deploy:**
-    * Railway should automatically build and deploy your project based on the `Procfile` (`web: node server/index.js`). Monitor the build and deployment logs.
-
-6.  **Access:**
-    * Once deployed, Railway will provide a public URL (e.g., `your-project-name.up.railway.app`). Use this URL to access the experiment. The Colyseus WebSocket server will run on the same domain/port.
-
-7.  **Retrieve Data:**
-    * You can access the persistent volume data (`/data/experiment_data_colyseus.jsonl`) through the Railway dashboard or using the Railway CLI. Check the Railway documentation for details on accessing volume data.
+    * During rounds, data will be logged to `data/flocker.db`.
 
 ## Data Format (`experiment_data_colyseus.jsonl`)
 
