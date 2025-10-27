@@ -1,6 +1,12 @@
+# Deploy script for development
+pi*
+
 # Parcel 
 .parcel-cache
 dist
+
+# Examples
+examples/
 
 # Node.js dependencies
 node_modules/
