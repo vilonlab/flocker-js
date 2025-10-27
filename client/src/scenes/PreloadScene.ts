@@ -1,3 +1,5 @@
+import Phaser from "phaser"
+
 export default class PreloadScene extends Phaser.Scene {
     constructor() {
         super({ key: 'PreloadScene' });
@@ -7,16 +9,16 @@ export default class PreloadScene extends Phaser.Scene {
         console.log("PreloadScene: Preloading assets...");
 
         // Display a loading message
-        let loadingText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 50, 'Loading...', { font: '20px Arial', fill: '#ffffff' });
+        let loadingText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 - 50, 'Loading...', { font: '20px Arial', color: '#ffffff' });
         loadingText.setOrigin(0.5, 0.5);
-        let percentText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '0%', { font: '18px Arial', fill: '#ffffff' });
+        let percentText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2, '0%', { font: '18px Arial', color: '#ffffff' });
         percentText.setOrigin(0.5, 0.5);
-        let assetText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, '', { font: '18px Arial', fill: '#ffffff' });
+        let assetText = this.add.text(this.cameras.main.width / 2, this.cameras.main.height / 2 + 50, '', { font: '18px Arial', color: '#ffffff' });
         assetText.setOrigin(0.5, 0.5);
 
         // Update loading progress text
         this.load.on('progress', function (value) {
-            percentText.setText(parseInt(value * 100) + '%');
+            percentText.setText(value * 100 + '%');
         });
 
         // Update asset being loaded text
@@ -55,13 +57,13 @@ export default class PreloadScene extends Phaser.Scene {
         }
 
         // Start the main game scene
-        this.scene.start('GameScene');
+        this.scene.start('SceneSelector');
 
         // Resume AudioContext after user interaction
-        this.input.once('pointerdown', () => {
-            if (this.sound.context.state === 'suspended') {
-                this.sound.context.resume();
-            }
-        });
+        // this.input.once('pointerdown', () => {
+        //     if (this.sound.context.state === 'suspended') {
+        //         this.sound.context.resume();
+        //     }
+        // });
     }
 }
