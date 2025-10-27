@@ -13,6 +13,10 @@ examples/
 
 # Node.js dependencies
 node_modules/
+*-lock*
+
+# Shhhhhh
+*.claude/
 
 # Logs
 logs/
@@ -128,3 +132,4 @@ ehthumbs_vista.db
 # # Or specify output directory:
 # dist/
 # build/
+run-local

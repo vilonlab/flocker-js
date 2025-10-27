@@ -1,6 +1,6 @@
 # Flocker
 
-This project implements an online multiplayer experiment using Phaser.js (frontend) and **Colyseus** (Node.js backend framework) for real-time communication and state management. It is designed for deployment on Railway.
+This project implements an online multiplayer experiment using **Phaser.js** (frontend) and **Colyseus** (Node.js backend framework) for real-time communication and state management.
 
 ## Project Structure
 
