@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// --- DEPRECATED ---
+// This file-based logger has been replaced by the SQLite-based DataLogger
+// Keeping for reference only. Do not use in new code.
+
 // --- IMPORTANT for Railway ---
 // Railway provides a persistent volume, typically mounted at /data
 // We should write our logs there. If run locally, it will write to project dir.
