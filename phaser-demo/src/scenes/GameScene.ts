@@ -1,0 +1,267 @@
+import Phaser from 'phaser';
+import * as Colyseus from 'colyseus.js';
+import { Player, Zone, RoomState } from '../../../server/src/rooms/schema/experimentSchema'
+
+import { BACKEND_HTTP_URL, BACKEND_URL } from "../backend";
+
+export default class GameScene extends Phaser.Scene {
+    private playerSpeed = 200;
+    private lastPosition = { x: 0, y: 0 };
+    private lastSentPosition = { x: 0, y: 0 };
+    private lastPositionUpdateTime = 0;
+    private lastCollisionPositionUpdateTime = 0; // Separate timer for collision updates
+    private positionUpdateThreshold = 5; // Only send update if position differs by more than 5 pixels
+    private positionUpdateInterval = 100; // Throttle: send updates at most every 100ms
+    private collisionUpdateInterval = 50; // Throttle collision updates (can be different from position updates)
+
+    // Colyseus properties
+    room: Colyseus.Room<RoomState>;
+    playerEntities: { [sessionId: string]: Phaser.GameObjects.Container } = {};
+	zoneEntities: { [zoneId: string]: Phaser.GameObjects.Arc } = {};
+    cursorKeys: Phaser.Types.Input.Keyboard.CursorKeys;
+    keys: { [key: string]: Phaser.Input.Keyboard.Key };
+    playersGroup: Phaser.Physics.Arcade.Group;
+
+    constructor() {
+        super({ key: "experiment" });
+    }
+
+    // preload() {
+    // }
+
+    async create() {
+        this.cursorKeys = this.input.keyboard!.createCursorKeys();
+
+        // Create keys object that can recognize number keys 1-4
+        this.keys = this.input.keyboard!.addKeys({
+            'ONE': Phaser.Input.Keyboard.KeyCodes.ONE,
+            'TWO': Phaser.Input.Keyboard.KeyCodes.TWO,
+            'THREE': Phaser.Input.Keyboard.KeyCodes.THREE,
+            'FOUR': Phaser.Input.Keyboard.KeyCodes.FOUR,
+        }) as { [key: string]: Phaser.Input.Keyboard.Key };
+
+        // Create physics group for players
+        this.playersGroup = this.physics.add.group();
+
+        // Add collider to prevent players from overlapping
+        this.physics.add.collider(this.playersGroup, this.playersGroup, () => {
+            const currentTime = this.time.now;
+            const timeSinceLastCollisionUpdate = currentTime - this.lastCollisionPositionUpdateTime;
+
+            // Only send position update if enough time has passed
+            if (timeSinceLastCollisionUpdate >= this.collisionUpdateInterval) {
+                this.room.send("position", { "x": this.playerEntities[this.room.sessionId].x, "y": this.playerEntities[this.room.sessionId].y });
+                this.lastCollisionPositionUpdateTime = currentTime;
+            }
+        });
+
+        // connect with the room
+        await this.connect();
+
+        const $ = Colyseus.getStateCallbacks(this.room);
+
+	// Handle new zones added after we join
+	$(this.room.state).zones.onAdd((zone, zoneId) => {
+		console.log("New zone added:", zoneId, zone);
+		// Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
+		const colorNumber = parseInt(zone.color.replace('#', ''), 16);
+
+		// Create an arc (circle) for this zone
+		const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, 0.2);
+		entity.setDepth(-1);
+		this.zoneEntities[zoneId] = entity;
+
+		// Listen for zone updates
+		$(zone).onChange(() => {
+			entity.x = zone.x;
+			entity.y = zone.y;
+			entity.radius = zone.radius;
+			const updatedColor = parseInt(zone.color.replace('#', ''), 16);
+			entity.setFillStyle(updatedColor, 0.5);
+		});
+	});
+
+	// Remove zone when removed from server
+	$(this.room.state).zones.onRemove((zone, zoneId) => {
+		console.log("Zone removed:", zoneId);
+		const entity = this.zoneEntities[zoneId];
+		if (entity) {
+			entity.destroy();
+			delete this.zoneEntities[zoneId];
+		}
+	});
+
+	// Handle new players added after we join
+        $(this.room.state).players.onAdd((player, sessionId) => {
+            console.log("New player added:", sessionId, player);
+
+            // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
+            const colorNumber = parseInt(player.color.replace('#', ''), 16);
+
+            // Create an arc (circle) for the player
+            const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
+
+            // Create text to display the emote in the middle of the circle
+            const text = this.add.text(0, 0, player.emote.toString(), {
+                fontSize: '24px',
+                color: player.textColor,
+                fontStyle: 'bold'
+            });
+            text.setOrigin(0.5, 0.5); // Center the text
+
+            // Create a container to group the circle and text
+            const container = this.add.container(player.x, player.y, [circle, text]);
+
+            // Enable physics on the container
+            this.physics.world.enable(container);
+            const body = container.body as Phaser.Physics.Arcade.Body;
+            body.setCircle(player.radius);
+
+            this.playerEntities[sessionId] = container;
+
+            // Add to players group for collision detection
+            this.playersGroup.add(container);
+
+            // listening for server updates
+            $(player).onChange(() => {
+
+                container.x = player.x;
+                container.y = player.y;
+
+                // Update the emote text for all players
+                const textElement = container.getAt(1) as Phaser.GameObjects.Text;
+                textElement.setText(player.emote.toString());
+            });
+        });
+
+        // remove local reference when entity is removed from the server
+        $(this.room.state).players.onRemove((player, sessionId) => {
+            console.log("Player removed:", sessionId);
+            const entity = this.playerEntities[sessionId];
+            if (entity) {
+                this.playersGroup.remove(entity, true, true); // remove from group and destroy
+                delete this.playerEntities[sessionId]
+            }
+        });
+    }
+
+    async connect() {
+        // add connection status text
+        const connectionStatusText = this.add
+            .text(0, 0, "Trying to connect with the server...")
+            .setStyle({ color: "#ff0000" })
+            .setPadding(4)
+
+        const client = new Colyseus.Client(BACKEND_URL);
+
+        try {
+            // Add a timeout to prevent hanging forever
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Connection timeout')), 5000)
+            );
+
+            this.room = await Promise.race([
+                client.joinOrCreate("ExperimentRoom", {}),
+                timeoutPromise
+            ]);
+
+            // connection successful!
+            connectionStatusText.destroy();
+
+        } catch (e) {
+            // couldn't connect
+            connectionStatusText.text = "Could not connect with the server. Error: " + e;
+            console.error("Connection error:", e);
+        }
+
+    }
+
+    update(time: number, delta: number): void {
+        // skip loop if not connected with room yet.
+        if (!this.room) {
+            return;
+        }
+
+        // calculate movement delta based on arrow keys
+        let dx = 0;
+        let dy = 0;
+        let emote = "";
+
+        if (this.cursorKeys.left.isDown) {
+            dx -= 1;
+        }
+        if (this.cursorKeys.right.isDown) {
+            dx += 1;
+        }
+        if (this.cursorKeys.up.isDown) {
+            dy -= 1;
+        }
+        if (this.cursorKeys.down.isDown) {
+            dy += 1;
+        }
+
+        if (this.keys.ONE.isDown) {
+            emote = "?";
+        }
+        if (this.keys.TWO.isDown) {
+            emote = "!";
+        }
+        if (this.keys.THREE.isDown) {
+            emote = "+"
+        }
+        if (this.keys.FOUR.isDown) {
+            emote = "-"
+        }
+
+        // only send movement if there's a delta
+        if (dx !== 0 || dy !== 0) {
+            this.room.send("move", { "x": dx, "y": dy });
+        }
+
+        // Check if selected emote is different from current character emote
+        const currentPlayer = this.room.state.players.get(this.room.sessionId);
+        if (emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
+            this.room.send("emote", { "emote": emote });
+        }
+
+        // Sync position with server if it differs (for collision-based movements)
+        if (currentPlayer) {
+            const playerEntity = this.playerEntities[this.room.sessionId];
+
+            if (playerEntity) {
+                const actualX = Math.round(playerEntity.x);
+                const actualY = Math.round(playerEntity.y);
+                const serverX = Math.round(currentPlayer.x);
+                const serverY = Math.round(currentPlayer.y);
+
+                // Calculate distance between actual position and server position
+                const dx = Math.abs(actualX - serverX);
+                const dy = Math.abs(actualY - serverY);
+
+                if (dy > this.positionUpdateThreshold || dx > this.positionUpdateThreshold) {
+                    this.room.send("position", { "x": actualX, "y": actualY });
+                    console.log('Sent position message: x =' + actualX + " y = " + actualY)
+                    this.lastSentPosition = { x: actualX, y: actualY };
+                    this.lastPositionUpdateTime = time;
+                }
+            }
+        }
+
+        //         // Check if enough time has passed since last update
+        //         const timeSinceLastUpdate = time - this.lastPositionUpdateTime;
+
+        //         // Send position update if:
+        //         // 1. Position differs by more than threshold, AND
+        //         // 2. Enough time has passed since last update, AND
+        //         // 3. Position has actually changed since last sent position
+        //         // if ((dx > this.positionUpdateThreshold || dy > this.positionUpdateThreshold) &&
+        //         //     timeSinceLastUpdate >= this.positionUpdateInterval &&
+        //         //     (actualX !== this.lastSentPosition.x || actualY !== this.lastSentPosition.y)) {
+        //         if (timeSinceLastUpdate >= this.positionUpdateInterval) {
+
+        //         }
+        //     }
+        // }
+    }
+
+}
