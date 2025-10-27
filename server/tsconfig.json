@@ -15,7 +15,8 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "useDefineForClassFields": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "lib"]
