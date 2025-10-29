@@ -21,6 +21,8 @@ export default class GameScene extends Phaser.Scene {
     cursorKeys: Phaser.Types.Input.Keyboard.CursorKeys;
     keys: { [key: string]: Phaser.Input.Keyboard.Key };
     playersGroup: Phaser.Physics.Arcade.Group;
+    debugText: Phaser.GameObjects.Text;
+    // currentPlayer: Phaser.GameObjects.Container;
 
     constructor() {
         super({ key: "experiment" });
@@ -40,58 +42,45 @@ export default class GameScene extends Phaser.Scene {
             'FOUR': Phaser.Input.Keyboard.KeyCodes.FOUR,
         }) as { [key: string]: Phaser.Input.Keyboard.Key };
 
+        // connect with the room
+        await this.connect();
+
         // Create physics group for players
         this.playersGroup = this.physics.add.group();
 
         // Add collider to prevent players from overlapping
         this.physics.add.collider(this.playersGroup, this.playersGroup, () => {
+            // Check if room exists before accessing it
+            if (!this.room) return;
+
             const currentTime = this.time.now;
             const timeSinceLastCollisionUpdate = currentTime - this.lastCollisionPositionUpdateTime;
 
             // Only send position update if enough time has passed
             if (timeSinceLastCollisionUpdate >= this.collisionUpdateInterval) {
-                this.room.send("position", { "x": this.playerEntities[this.room.sessionId].x, "y": this.playerEntities[this.room.sessionId].y });
-                this.lastCollisionPositionUpdateTime = currentTime;
+                const playerEntity = this.playerEntities[this.room.sessionId];
+                if (playerEntity) {
+                    this.room.send("position", { "x": playerEntity.x, "y": playerEntity.y });
+                    this.lastCollisionPositionUpdateTime = currentTime;
+                }
             }
         });
 
-        // connect with the room
-        await this.connect();
-
         const $ = Colyseus.getStateCallbacks(this.room);
 
-	// Handle new zones added after we join
-	$(this.room.state).zones.onAdd((zone, zoneId) => {
-		console.log("New zone added:", zoneId, zone);
-		// Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
-		const colorNumber = parseInt(zone.color.replace('#', ''), 16);
+        // Handle new zones added after we join
+        $(this.room.state).zones.onAdd((zone, zoneId) => {
+            console.log("New zone added:", zoneId, zone);
+            // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
+            const colorNumber = parseInt(zone.color.replace('#', ''), 16);
 
-		// Create an arc (circle) for this zone
-		const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, 0.2);
-		entity.setDepth(-1);
-		this.zoneEntities[zoneId] = entity;
+            // Create an arc (circle) for this zone
+            const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, 0.2);
+            entity.setDepth(-1);
+            this.zoneEntities[zoneId] = entity;
+        });
 
-		// Listen for zone updates
-		$(zone).onChange(() => {
-			entity.x = zone.x;
-			entity.y = zone.y;
-			entity.radius = zone.radius;
-			const updatedColor = parseInt(zone.color.replace('#', ''), 16);
-			entity.setFillStyle(updatedColor, 0.5);
-		});
-	});
-
-	// Remove zone when removed from server
-	$(this.room.state).zones.onRemove((zone, zoneId) => {
-		console.log("Zone removed:", zoneId);
-		const entity = this.zoneEntities[zoneId];
-		if (entity) {
-			entity.destroy();
-			delete this.zoneEntities[zoneId];
-		}
-	});
-
-	// Handle new players added after we join
+        // Handle new players added after we join
         $(this.room.state).players.onAdd((player, sessionId) => {
             console.log("New player added:", sessionId, player);
 
@@ -119,6 +108,10 @@ export default class GameScene extends Phaser.Scene {
 
             this.playerEntities[sessionId] = container;
 
+            // if (sessionId === this.room.sessionId) {
+            //     this.currentPlayer = container;
+            // }
+
             // Add to players group for collision detection
             this.playersGroup.add(container);
 
@@ -143,34 +136,24 @@ export default class GameScene extends Phaser.Scene {
                 delete this.playerEntities[sessionId]
             }
         });
+
+        // add debugging text
+        const debugText = this.add
+            .text(0, 0, "debug text here")
+            .setStyle({ color: "#ff0000" })
+        this.debugText = debugText
     }
 
     async connect() {
-        // add connection status text
-        const connectionStatusText = this.add
-            .text(0, 0, "Trying to connect with the server...")
-            .setStyle({ color: "#ff0000" })
-            .setPadding(4)
 
         const client = new Colyseus.Client(BACKEND_URL);
 
         try {
-            // Add a timeout to prevent hanging forever
-            const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            );
 
-            this.room = await Promise.race([
-                client.joinOrCreate("ExperimentRoom", {}),
-                timeoutPromise
-            ]);
-
-            // connection successful!
-            connectionStatusText.destroy();
+            this.room = await client.joinOrCreate("ExperimentRoom", {})
 
         } catch (e) {
-            // couldn't connect
-            connectionStatusText.text = "Could not connect with the server. Error: " + e;
+
             console.error("Connection error:", e);
         }
 
@@ -199,7 +182,6 @@ export default class GameScene extends Phaser.Scene {
         if (this.cursorKeys.down.isDown) {
             dy += 1;
         }
-
         if (this.keys.ONE.isDown) {
             emote = "?";
         }
@@ -219,32 +201,45 @@ export default class GameScene extends Phaser.Scene {
         }
 
         // Check if selected emote is different from current character emote
+        if (!this.room.state.players) {
+            return;
+        }
         const currentPlayer = this.room.state.players.get(this.room.sessionId);
+        
         if (emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
             this.room.send("emote", { "emote": emote });
         }
 
         // Sync position with server if it differs (for collision-based movements)
+        // if (currentPlayer) {
+        //     const playerEntity = this.playerEntities[this.room.sessionId];
+
+        //     if (playerEntity) {
+        //         const actualX = Math.round(playerEntity.x);
+        //         const actualY = Math.round(playerEntity.y);
+        //         const serverX = Math.round(currentPlayer.x);
+        //         const serverY = Math.round(currentPlayer.y);
+
+        //         // Calculate distance between actual position and server position
+        //         const dx = Math.abs(actualX - serverX);
+        //         const dy = Math.abs(actualY - serverY);
+
+        //         if (dy > this.positionUpdateThreshold || dx > this.positionUpdateThreshold) {
+        //             this.room.send("position", { "x": actualX, "y": actualY });
+        //             console.log('Sent position message: x =' + actualX + " y = " + actualY)
+        //             this.lastSentPosition = { x: actualX, y: actualY };
+        //             this.lastPositionUpdateTime = time;
+        //         }
+        //     }
+        // }
+
+        // update debug text
         if (currentPlayer) {
-            const playerEntity = this.playerEntities[this.room.sessionId];
-
-            if (playerEntity) {
-                const actualX = Math.round(playerEntity.x);
-                const actualY = Math.round(playerEntity.y);
-                const serverX = Math.round(currentPlayer.x);
-                const serverY = Math.round(currentPlayer.y);
-
-                // Calculate distance between actual position and server position
-                const dx = Math.abs(actualX - serverX);
-                const dy = Math.abs(actualY - serverY);
-
-                if (dy > this.positionUpdateThreshold || dx > this.positionUpdateThreshold) {
-                    this.room.send("position", { "x": actualX, "y": actualY });
-                    console.log('Sent position message: x =' + actualX + " y = " + actualY)
-                    this.lastSentPosition = { x: actualX, y: actualY };
-                    this.lastPositionUpdateTime = time;
-                }
-            }
+            this.debugText.text = this.generateDebugText(
+                this.room.sessionId,
+                currentPlayer.zone,
+                this.room.roomId
+            );
         }
 
         //         // Check if enough time has passed since last update
@@ -262,6 +257,29 @@ export default class GameScene extends Phaser.Scene {
         //         }
         //     }
         // }
+    }
+
+    private generateDebugText(session_id: string, zone_id: number, room_id: string) {
+        let str: string = ""
+        if (session_id) {
+            str += "\nSession ID: " + session_id
+        }
+        else {
+            str += "\nSession ID: "
+        }
+        if (zone_id) {
+            str += "\nZone: " + zone_id
+        }
+        else {
+            str += "\nZone: "
+        }
+        if (room_id) {
+            str += "\nRoom ID: " + room_id
+        }
+        else {
+            str += "\nRoom ID: "
+        }
+        return str
     }
 
 }

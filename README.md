@@ -90,7 +90,6 @@ This project implements an online multiplayer experiment using **Phaser.js** (fr
 ## Data Format (`experiment_data_colyseus.jsonl`)
 
 Data is saved in JSON Lines format. Each line is a valid JSON object representing a recorded event or state snapshot. Example entries:
-
 ```json
 {"eventType":"session_start","timestamp":1712964000000}
 {"timestamp":1712964061500,"round":1,"playerId":"clientSessionId1","role":"informed","x":410,"y":305,"emote":null,"targetX":650,"targetY":300,"isInTargetZone":false,"currentZone":null,"isFinalState":false}
