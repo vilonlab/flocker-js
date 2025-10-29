@@ -22,6 +22,7 @@ export default class GameScene extends Phaser.Scene {
     keys: { [key: string]: Phaser.Input.Keyboard.Key };
     playersGroup: Phaser.Physics.Arcade.Group;
     debugText: Phaser.GameObjects.Text;
+    timerText: Phaser.GameObjects.Text;
     // currentPlayer: Phaser.GameObjects.Container;
 
     constructor() {
@@ -142,6 +143,12 @@ export default class GameScene extends Phaser.Scene {
             .text(0, 0, "debug text here")
             .setStyle({ color: "#ff0000" })
         this.debugText = debugText
+
+        // add round timer text
+        const timerText = this.add
+            .text(400, 0, "Round Time: ")
+            .setStyle({ color: "#ff0000" })
+        this.timerText = timerText
     }
 
     async connect() {
@@ -242,6 +249,8 @@ export default class GameScene extends Phaser.Scene {
             );
         }
 
+        this.timerText.text = "" + this.room.state.roundTime;
+
         //         // Check if enough time has passed since last update
         //         const timeSinceLastUpdate = time - this.lastPositionUpdateTime;
 
@@ -268,7 +277,7 @@ export default class GameScene extends Phaser.Scene {
             str += "\nSession ID: "
         }
         if (zone_id) {
-            str += "\nZone: " + zone_id
+            str += "\nZone: " + zone_id.toString()
         }
         else {
             str += "\nZone: "

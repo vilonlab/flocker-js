@@ -7,6 +7,8 @@ export class ExperimentRoom extends Room<RoomState> {
 	logger = DataLogger.getInstance();
 	private zoneHues = new Set<number>(); // Track hues used by zones
 	private playerHues = new Set<number>(); // Track hues used by players
+	private timerStarted = false; // Track if round timer has started
+	private roundDuration = 30; // Round duration in seconds
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
@@ -122,6 +124,12 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.emote = '';
 
 		this.state.players.set(client.sessionId, player);
+
+		// Start round timer when first player joins
+		if (!this.timerStarted) {
+			this.startRoundTimer();
+			this.timerStarted = true;
+		}
 	}
 
 	// Called when a client leaves
@@ -258,4 +266,38 @@ export class ExperimentRoom extends Room<RoomState> {
 
         return zone;
     }
+
+	// Start the round timer
+	private startRoundTimer() {
+		// Initialize timer to round duration
+		this.state.roundTime = this.roundDuration;
+		console.log(`Round timer started: ${this.roundDuration} seconds`);
+
+		// Countdown every second
+		this.clock.setInterval(() => {
+			this.state.roundTime -= 1;
+
+			if (this.state.roundTime <= 0) {
+				console.log('Round ended! Resetting room...');
+				this.resetRoom();
+			}
+		}, 1000); // Update every 1 second
+	}
+
+	// Reset the room to initial state
+	private resetRoom() {
+		console.log('Resetting room state...');
+
+		// Reset all players to center and clear their state
+		this.state.players.forEach((player) => {
+			player.x = 400;
+			player.y = 300;
+			player.emote = '';
+			player.zone = -1;
+		});
+
+		// Restart the timer
+		this.state.roundTime = this.roundDuration;
+		console.log('Room reset complete. Timer restarted.');
+	}
 }
