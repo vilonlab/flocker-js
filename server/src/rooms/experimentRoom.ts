@@ -10,9 +10,12 @@ export class ExperimentRoom extends Room<RoomState> {
 	private playerHues = new Set<number>(); // Track hues used by players
 	private timerStarted = false; // Track if round timer has started
 	private roundDuration = config.round.duration; // Round duration in seconds
+	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
+
+        this.clock.start()
 
 		// Create four zones around the center of the screen
 		const centerX = config.world.centerX;
@@ -94,6 +97,22 @@ export class ExperimentRoom extends Room<RoomState> {
 			}
 
 			player.emote = data.emote;
+
+			// Check if this player already has an active emote timeout
+			const existingTimeout = this.emoteTimeouts.get(client.sessionId);
+
+			if (existingTimeout) {
+				// Reset the existing timeout
+				existingTimeout.reset();
+			} else {
+				// Create new timeout for this player
+				const emoteTimeout = this.clock.setTimeout(() => {
+					player.emote = "";
+					this.emoteTimeouts.delete(client.sessionId);
+				}, config.player.emoteTimeout);
+
+				this.emoteTimeouts.set(client.sessionId, emoteTimeout);
+			}
 		});
 	}
 
@@ -136,6 +155,14 @@ export class ExperimentRoom extends Room<RoomState> {
 	// Called when a client leaves
 	onLeave(client: Client, _consented: boolean) {
 		console.log(client.sessionId, 'left!');
+
+		// Clear any active emote timeout for this player
+		const emoteTimeout = this.emoteTimeouts.get(client.sessionId);
+		if (emoteTimeout) {
+			emoteTimeout.clear();
+			this.emoteTimeouts.delete(client.sessionId);
+		}
+
 		this.state.players.delete(client.sessionId);
 	}
 

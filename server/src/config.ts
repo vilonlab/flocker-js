@@ -32,6 +32,7 @@ export const config = {
     startY: 300,
     minHueDifference: 60, // for distinct player colors
     minHueDifferenceFallback: 30, // when running out of colors
+    emoteTimeout: 2000, // timeout for emote in ms
   },
 
   // Color generation settings
