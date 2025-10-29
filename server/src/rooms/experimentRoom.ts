@@ -1,6 +1,7 @@
 import {Room, type Client} from 'colyseus';
 import DataLogger from '../dataLogger';
 import {Player, Zone, RoomState} from './schema/experimentSchema';
+import {config} from '../config';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -8,16 +9,16 @@ export class ExperimentRoom extends Room<RoomState> {
 	private zoneHues = new Set<number>(); // Track hues used by zones
 	private playerHues = new Set<number>(); // Track hues used by players
 	private timerStarted = false; // Track if round timer has started
-	private roundDuration = 30; // Round duration in seconds
+	private roundDuration = config.round.duration; // Round duration in seconds
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
 
 		// Create four zones around the center of the screen
-		const centerX = 400;
-		const centerY = 300;
-		const zoneRadius = 60;
-		const offset = 200; // Distance from center
+		const centerX = config.world.centerX;
+		const centerY = config.world.centerY;
+		const zoneRadius = config.zones.radius;
+		const offset = config.zones.offsetFromCenter; // Distance from center
 
 		// Left zone
         //makeZone(id: number, x: number, y: number, radius: number):
@@ -33,7 +34,7 @@ export class ExperimentRoom extends Room<RoomState> {
         const bottomZone = this.makeZone(3, centerX, centerY - offset, zoneRadius);
         this.state.zones.set('bottom', bottomZone);
 
-		// Set up periodic snapshot logging every 2 seconds
+		// Set up periodic snapshot logging
 		this.clock.setInterval(() => {
 			this.logger.logSnapshot({
 				timestamp: this.clock.currentTime, // Colyseus simulation time
@@ -51,7 +52,7 @@ export class ExperimentRoom extends Room<RoomState> {
                     emote: player.emote
 				})),
 			});
-		}, 2000); // Log every 2 seconds
+		}, config.logging.snapshotInterval);
 
 		// Called every time this room receives a "move" message
 		this.onMessage('move', (client, data) => {
@@ -102,13 +103,13 @@ export class ExperimentRoom extends Room<RoomState> {
 
 		// Create new player with initialized properties
 		const player = new Player();
-		player.x = 400; // Start at center
-		player.y = 300;
+		player.x = config.player.startX; // Start at center
+		player.y = config.player.startY;
 		player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
 
 		// Combine zone and player hues to ensure player colors are distinct from both zones and other players
 		const allUsedHues = new Set([...this.zoneHues, ...this.playerHues]);
-		player.color = this.generateDistinctColor(allUsedHues, 60);
+		player.color = this.generateDistinctColor(allUsedHues, config.player.minHueDifference);
 
 		// The new hue was added to allUsedHues, so we need to find it and add to playerHues
 		// by comparing the sets
@@ -173,7 +174,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		}
 
 		// If no distinct hues available, reduce the minimum difference
-		if (hueOptions.length === 0 && minHueDifference > 30) {
+		if (hueOptions.length === 0 && minHueDifference > config.player.minHueDifferenceFallback) {
 			return this.generateDistinctColor(usedHues, minHueDifference - 10);
 		}
 
@@ -185,8 +186,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		usedHues.add(selectedHue);
 
 		// Use high saturation and medium lightness for vibrant colors
-		const saturation = 70 + Math.random() * 25; // 70-95%
-		const lightness = 45 + Math.random() * 15; // 45-60%
+		const saturation = config.colors.saturation.min + Math.random() * (config.colors.saturation.max - config.colors.saturation.min);
+		const lightness = config.colors.lightness.min + Math.random() * (config.colors.lightness.max - config.colors.lightness.min);
 
 		return this.hslToHex(selectedHue, saturation, lightness);
 	}
@@ -262,7 +263,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		zone.y = y;
 		zone.radius = radius;
 		// Generate distinct color for zone with dramatic hue separation
-		zone.color = this.generateDistinctColor(this.zoneHues, 90);
+		zone.color = this.generateDistinctColor(this.zoneHues, config.zones.minHueDifference);
 
         return zone;
     }
@@ -281,7 +282,7 @@ export class ExperimentRoom extends Room<RoomState> {
 				console.log('Round ended! Resetting room...');
 				this.resetRoom();
 			}
-		}, 1000); // Update every 1 second
+		}, config.round.timerInterval);
 	}
 
 	// Reset the room to initial state
@@ -290,8 +291,8 @@ export class ExperimentRoom extends Room<RoomState> {
 
 		// Reset all players to center and clear their state
 		this.state.players.forEach((player) => {
-			player.x = 400;
-			player.y = 300;
+			player.x = config.player.startX;
+			player.y = config.player.startY;
 			player.emote = '';
 			player.zone = -1;
 		});

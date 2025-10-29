@@ -3,16 +3,17 @@ import * as Colyseus from 'colyseus.js';
 import { Player, Zone, RoomState } from '../../../server/src/rooms/schema/experimentSchema'
 
 import { BACKEND_HTTP_URL, BACKEND_URL } from "../backend";
+import { config } from '../config';
 
 export default class GameScene extends Phaser.Scene {
-    private playerSpeed = 200;
+    private playerSpeed = config.player.speed;
     private lastPosition = { x: 0, y: 0 };
     private lastSentPosition = { x: 0, y: 0 };
     private lastPositionUpdateTime = 0;
     private lastCollisionPositionUpdateTime = 0; // Separate timer for collision updates
-    private positionUpdateThreshold = 5; // Only send update if position differs by more than 5 pixels
-    private positionUpdateInterval = 100; // Throttle: send updates at most every 100ms
-    private collisionUpdateInterval = 50; // Throttle collision updates (can be different from position updates)
+    private positionUpdateThreshold = config.network.positionUpdateThreshold;
+    private positionUpdateInterval = config.network.positionUpdateInterval;
+    private collisionUpdateInterval = config.network.collisionUpdateInterval;
 
     // Colyseus properties
     room: Colyseus.Room<RoomState>;
@@ -76,7 +77,7 @@ export default class GameScene extends Phaser.Scene {
             const colorNumber = parseInt(zone.color.replace('#', ''), 16);
 
             // Create an arc (circle) for this zone
-            const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, 0.2);
+            const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
             entity.setDepth(-1);
             this.zoneEntities[zoneId] = entity;
         });
@@ -93,9 +94,9 @@ export default class GameScene extends Phaser.Scene {
 
             // Create text to display the emote in the middle of the circle
             const text = this.add.text(0, 0, player.emote.toString(), {
-                fontSize: '24px',
+                fontSize: config.ui.playerText.fontSize,
                 color: player.textColor,
-                fontStyle: 'bold'
+                fontStyle: config.ui.playerText.fontStyle
             });
             text.setOrigin(0.5, 0.5); // Center the text
 
@@ -140,14 +141,14 @@ export default class GameScene extends Phaser.Scene {
 
         // add debugging text
         const debugText = this.add
-            .text(0, 0, "debug text here")
-            .setStyle({ color: "#ff0000" })
+            .text(config.ui.debug.position.x, config.ui.debug.position.y, "debug text here")
+            .setStyle({ color: config.ui.debug.color, fontSize: config.ui.debug.fontSize })
         this.debugText = debugText
 
         // add round timer text
         const timerText = this.add
-            .text(400, 0, "Round Time: ")
-            .setStyle({ color: "#ff0000" })
+            .text(config.ui.timer.position.x, config.ui.timer.position.y, config.ui.timer.prefix)
+            .setStyle({ color: config.ui.timer.color, fontSize: config.ui.timer.fontSize })
         this.timerText = timerText
     }
 
@@ -190,16 +191,16 @@ export default class GameScene extends Phaser.Scene {
             dy += 1;
         }
         if (this.keys.ONE.isDown) {
-            emote = "?";
+            emote = config.emotes.ONE;
         }
         if (this.keys.TWO.isDown) {
-            emote = "!";
+            emote = config.emotes.TWO;
         }
         if (this.keys.THREE.isDown) {
-            emote = "+"
+            emote = config.emotes.THREE;
         }
         if (this.keys.FOUR.isDown) {
-            emote = "-"
+            emote = config.emotes.FOUR;
         }
 
         // only send movement if there's a delta
@@ -242,11 +243,11 @@ export default class GameScene extends Phaser.Scene {
 
         // update debug text
         if (currentPlayer) {
-            this.debugText.text = this.generateDebugText(
-                this.room.sessionId,
-                currentPlayer.zone,
-                this.room.roomId
-            );
+            this.debugText.text = this.generateDebugText({
+                session_id: this.room.sessionId,
+                zone_id: currentPlayer.zone,
+                room_id: this.room.roomId
+            });
         }
 
         this.timerText.text = "" + this.room.state.roundTime;
@@ -268,27 +269,20 @@ export default class GameScene extends Phaser.Scene {
         // }
     }
 
-    private generateDebugText(session_id: string, zone_id: number, room_id: string) {
-        let str: string = ""
-        if (session_id) {
-            str += "\nSession ID: " + session_id
-        }
-        else {
-            str += "\nSession ID: "
-        }
-        if (zone_id) {
-            str += "\nZone: " + zone_id.toString()
-        }
-        else {
-            str += "\nZone: "
-        }
-        if (room_id) {
-            str += "\nRoom ID: " + room_id
-        }
-        else {
-            str += "\nRoom ID: "
-        }
-        return str
+    private generateDebugText(params: {
+        session_id?: string;
+        zone_id?: number;
+        room_id?: string;
+    }) {
+        const fields = {
+            'Session ID': params.session_id,
+            'Room ID': params.room_id,
+            'Zone': params.zone_id?.toString()
+        };
+
+        return Object.entries(fields)
+            .map(([label, value]) => `\n${label}: ${value || ''}`)
+            .join('');
     }
 
 }

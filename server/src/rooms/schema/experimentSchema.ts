@@ -1,4 +1,5 @@
 import {type, Schema, MapSchema} from '@colyseus/schema';
+import {config} from '../../config';
 
 class Player extends Schema {
 	@type('number') x = 0;
@@ -9,7 +10,7 @@ class Player extends Schema {
 	@type('number') points = 0;
 	@type('string') emote = '';
     @type('number') zone = -1;
-    @type('number') radius = 20;
+    @type('number') radius = config.player.radius;
 }
 
 class Zone extends Schema {

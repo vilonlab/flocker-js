@@ -1,19 +1,20 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene';
+import { config as gameConfig } from './config';
 
 import { BACKEND_HTTP_URL } from "./backend";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 800,
-  height: 600,
+  width: gameConfig.game.width,
+  height: gameConfig.game.height,
   parent: 'game-container',
-  backgroundColor: '#ffffff',
+  backgroundColor: gameConfig.game.backgroundColor,
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { x: 0, y: 0 },
-      debug: false
+      gravity: gameConfig.physics.gravity,
+      debug: gameConfig.physics.debug
     }
   },
   scene: [GameScene]
