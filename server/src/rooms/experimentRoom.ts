@@ -2,6 +2,7 @@ import {Room, type Client} from 'colyseus';
 import DataLogger from '../dataLogger';
 import {Player, Zone, RoomState} from './schema/experimentSchema';
 import {config} from '../config';
+import { randomInt } from 'node:crypto';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -11,6 +12,7 @@ export class ExperimentRoom extends Room<RoomState> {
 	private timerStarted = false; // Track if round timer has started
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
+    private hasHost = false;
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
@@ -24,7 +26,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		const offset = config.zones.offsetFromCenter; // Distance from center
 
 		// Left zone
-        //makeZone(id: number, x: number, y: number, radius: number):
+        // makeZone(id: number, x: number, y: number, radius: number):
         const leftZone = this.makeZone(0, centerX - offset, centerY, zoneRadius);
         this.state.zones.set('left', leftZone);
 
@@ -66,6 +68,11 @@ export class ExperimentRoom extends Room<RoomState> {
 				return;
 			}
 
+			// Only allow movement when round is active
+			// if (!this.state.roundActive) {
+			// 	return;
+			// }
+
 			player.x += data.x;
 			player.y += data.y;
 			console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
@@ -81,6 +88,11 @@ export class ExperimentRoom extends Room<RoomState> {
 				console.error(`Player not found for session ${client.sessionId}`);
 				return;
 			}
+
+			// Only allow movement when round is active
+			// if (!this.state.roundActive) {
+			// 	return;
+			// }
 
 			player.x = data.x;
 			player.y = data.y;
@@ -114,6 +126,28 @@ export class ExperimentRoom extends Room<RoomState> {
 				this.emoteTimeouts.set(client.sessionId, emoteTimeout);
 			}
 		});
+
+		// Called when host clicks start round button
+		this.onMessage('startRound', (client, data) => {
+			const player = this.state.players.get(client.sessionId);
+
+			if (!player) {
+				console.error(`Player not found for session ${client.sessionId}`);
+				return;
+			}
+
+			// Only host can start the round
+			if (!player.host) {
+				console.warn(`Player ${player.name} attempted to start round but is not host`);
+				return;
+			}
+
+			// Only start if round is not already active
+			if (!this.state.roundActive) {
+				this.state.roundActive = true;
+				console.log(`Host ${player.name} started the round`);
+			}
+		});
 	}
 
 	// Called every time a client joins
@@ -143,12 +177,20 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.textColor = this.getContrastingTextColor(player.color);
 		player.emote = '';
 
+        if (!this.hasHost) {
+            this.hasHost = true;
+            player.host = true;
+        }
+
 		this.state.players.set(client.sessionId, player);
 
-		// Start round timer when first player joins
+		// Initialize round when first player joins (but don't start it yet)
 		if (!this.timerStarted) {
-			this.startRoundTimer();
+			this.state.roundTime = this.roundDuration;
+            this.state.targetZone = randomInt(4);
+			this.state.roundActive = false;
 			this.timerStarted = true;
+			this.startRoundTimer(); // Start the timer logic, but it will only countdown when roundActive is true
 		}
 	}
 
@@ -163,19 +205,26 @@ export class ExperimentRoom extends Room<RoomState> {
 			this.emoteTimeouts.delete(client.sessionId);
 		}
 
+    // Set new host if player was host
+        const player = this.state.players.get(client.sessionId)
+        if (player && player.host) {
+            this.hasHost = false;
+            this.setNextHost();
+        }
+
 		this.state.players.delete(client.sessionId);
 	}
 
-	// Helper method to generate random hex color
-	private generateRandomColor(): string {
-		const letters = '0123456789ABCDEF';
-		let color = '#';
-		for (let i = 0; i < 6; i++) {
-			color += letters[Math.floor(Math.random() * 16)];
-		}
+	// // Helper method to generate random hex color
+	// private generateRandomColor(): string {
+	// 	const letters = '0123456789ABCDEF';
+	// 	let color = '#';
+	// 	for (let i = 0; i < 6; i++) {
+	// 		color += letters[Math.floor(Math.random() * 16)];
+	// 	}
 
-		return color;
-	}
+	// 	return color;
+	// }
 
 	// Helper method to generate distinct colors using HSL color space
 	// This ensures colors are dramatically different in hue
@@ -299,15 +348,20 @@ export class ExperimentRoom extends Room<RoomState> {
 	private startRoundTimer() {
 		// Initialize timer to round duration
 		this.state.roundTime = this.roundDuration;
-		console.log(`Round timer started: ${this.roundDuration} seconds`);
+		console.log(`Round timer initialized: ${this.roundDuration} seconds`);
 
-		// Countdown every second
+		// Countdown every second, but only when round is active
 		this.clock.setInterval(() => {
+			// Only countdown if round is active
+			if (!this.state.roundActive) {
+				return;
+			}
+
 			this.state.roundTime -= 1;
 
 			if (this.state.roundTime <= 0) {
 				console.log('Round ended! Resetting room...');
-				this.resetRoom();
+				this.endRound();
 			}
 		}, config.round.timerInterval);
 	}
@@ -315,6 +369,9 @@ export class ExperimentRoom extends Room<RoomState> {
 	// Reset the room to initial state
 	private resetRoom() {
 		console.log('Resetting room state...');
+
+		// Pause the round - host must start the next round
+		this.state.roundActive = false;
 
 		// Reset all players to center and clear their state
 		this.state.players.forEach((player) => {
@@ -324,8 +381,36 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.zone = -1;
 		});
 
-		// Restart the timer
+        // set new target zone
+        this.state.targetZone = randomInt(4);
+
+		// Reset the timer (but don't start it - waiting for host)
 		this.state.roundTime = this.roundDuration;
-		console.log('Room reset complete. Timer restarted.');
+		console.log('Room reset complete. Waiting for host to start next round.');
 	}
+
+    private scorePlayers() {
+        this.state.players.forEach((player) => {
+            if (player.zone === this.state.targetZone) {
+                player.points += config.round.roundPoints
+            }
+        });
+    }
+
+    // Run this function when the round timer ends
+    private endRound() {
+        this.scorePlayers();
+        this.resetRoom();
+    }
+
+    private setNextHost() {
+        const nextPlayer = this.state.players.values().next().value;
+
+        if (!nextPlayer) {
+            return;
+        }
+
+        nextPlayer.host = true;
+        this.hasHost = true;
+    }
 }

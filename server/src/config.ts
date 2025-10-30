@@ -14,13 +14,14 @@ export const config = {
 
   // Round settings
   round: {
-    duration: 30, // seconds
+    duration: 15, // seconds
     timerInterval: 1000, // ms - how often to update timer
+    roundPoints: 1, // 
   },
 
   // Zone settings
   zones: {
-    radius: 60,
+    radius: 80,
     offsetFromCenter: 200, // distance from center
     minHueDifference: 90, // for distinct zone colors
   },

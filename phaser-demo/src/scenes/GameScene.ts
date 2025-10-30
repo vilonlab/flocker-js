@@ -24,6 +24,8 @@ export default class GameScene extends Phaser.Scene {
     playersGroup: Phaser.Physics.Arcade.Group;
     debugText: Phaser.GameObjects.Text;
     timerText: Phaser.GameObjects.Text;
+    startButton: Phaser.GameObjects.Text;
+    isHost: boolean = false;
     // currentPlayer: Phaser.GameObjects.Container;
 
     constructor() {
@@ -150,6 +152,53 @@ export default class GameScene extends Phaser.Scene {
             .text(config.ui.timer.position.x, config.ui.timer.position.y, config.ui.timer.prefix)
             .setStyle({ color: config.ui.timer.color, fontSize: config.ui.timer.fontSize })
         this.timerText = timerText
+
+        // // Add start button (initially hidden)
+        // this.startButton = this.add
+        //     .text(400, 300, 'START ROUND', {
+        //         fontSize: '32px',
+        //         color: '#00ff00',
+        //         backgroundColor: '#000000',
+        //         padding: { x: 20, y: 10 }
+        //     })
+        //     .setOrigin(0.5)
+        //     .setInteractive({ useHandCursor: true })
+        //     .setVisible(true)
+        //     .on('pointerdown', () => {
+        //         if (this.isHost && !this.room.state.roundActive) {
+        //             this.room.send('startRound');
+        //         }
+        //     })
+        //     .on('pointerover', () => {
+        //         if (this.isHost) {
+        //             this.startButton.setStyle({ color: '#ffffff' });
+        //         }
+        //     })
+        //     .on('pointerout', () => {
+        //         this.startButton.setStyle({ color: '#00ff00' });
+        //     });
+
+        // // Listen for roundActive state changes
+        // $(this.room.state).listen('roundActive', (value) => {
+        //     console.log('Round active changed:', value);
+        //     // Hide button when round is active
+        //     if (this.isHost) {
+        //         this.startButton.setVisible(!value);
+        //     }
+        // });
+
+        // // Listen for changes to current player's host status
+        // const currentPlayer = this.room.state.players.get(this.room.sessionId);
+        // if (currentPlayer) {
+        //     this.isHost = currentPlayer.host;
+        //     this.startButton.setVisible(this.isHost && !this.room.state.roundActive);
+
+        //     $(currentPlayer).listen('host', (value) => {
+        //         console.log('Host status changed:', value);
+        //         this.isHost = value;
+        //         this.startButton.setVisible(this.isHost && !this.room.state.roundActive);
+        //     });
+        // }
     }
 
     async connect() {
@@ -203,7 +252,7 @@ export default class GameScene extends Phaser.Scene {
             emote = config.emotes.FOUR;
         }
 
-        // only send movement if there's a delta
+        // only send movement if there's a delta and round is active
         if (dx !== 0 || dy !== 0) {
             this.room.send("move", { "x": dx, "y": dy });
         }
@@ -246,7 +295,11 @@ export default class GameScene extends Phaser.Scene {
             this.debugText.text = this.generateDebugText({
                 session_id: this.room.sessionId,
                 zone_id: currentPlayer.zone,
-                room_id: this.room.roomId
+                room_id: this.room.roomId,
+                target_zone: this.room.state.targetZone,
+                player_points: currentPlayer.points,
+                host: currentPlayer.host,
+                game_status: this.room.state.roundActive,
             });
         }
 
@@ -273,11 +326,19 @@ export default class GameScene extends Phaser.Scene {
         session_id?: string;
         zone_id?: number;
         room_id?: string;
+        target_zone?: number;
+        player_points?: number;
+        host?: boolean;
+        game_status?: boolean;
     }) {
         const fields = {
             'Session ID': params.session_id,
             'Room ID': params.room_id,
-            'Zone': params.zone_id?.toString()
+            'Zone': params.zone_id?.toString(),
+            'Target Zone': params.target_zone?.toString(),
+            'Player Points': params.player_points?.toString(),
+            'Game Status': params.game_status?.toString(),
+            'Host': params.host?.toString(),
         };
 
         return Object.entries(fields)

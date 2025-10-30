@@ -11,6 +11,7 @@ class Player extends Schema {
 	@type('string') emote = '';
     @type('number') zone = -1;
     @type('number') radius = config.player.radius;
+    @type('boolean') host = false;
 }
 
 class Zone extends Schema {
@@ -25,6 +26,8 @@ class RoomState extends Schema {
 	@type({map: Player}) players = new MapSchema<Player>();
 	@type('number') roundTime = 0;
 	@type({map: Zone}) zones = new MapSchema<Zone>();
+    @type('number') targetZone = -1;
+    @type('boolean') roundActive = false;
 }
 
 export {Player, Zone, RoomState};
