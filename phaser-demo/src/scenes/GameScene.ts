@@ -81,13 +81,34 @@ export default class GameScene extends Phaser.Scene {
             // Create an arc (circle) for this zone
             const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
             entity.setDepth(-1);
-            this.zoneEntities[zoneId] = entity;
+            if (this.room.state.targetZone === zone.id) {
+                entity.setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
+            }
+            this.zoneEntities[zone.id] = entity;
+        });
+
+        // Listen for targetZone changes to update stroke
+        $(this.room.state).listen('targetZone', (value) => {
+            console.log('Target zone changed:', value);
+            // Clear stroke from all zones
+            Object.keys(this.zoneEntities).forEach((zoneId) => {
+                if (zoneId === value.toString()) {
+                    this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
+                }
+                else {
+                    this.zoneEntities[zoneId].setStrokeStyle(0);
+                }
+            });
+            // Add stroke to the new target zone
+            if (value !== undefined && value !== -1 && this.zoneEntities[value.toString()]) {
+                this.zoneEntities[value.toString()].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
+            }
         });
 
         // Handle new players added after we join
         $(this.room.state).players.onAdd((player, sessionId) => {
             console.log("New player added:", sessionId, player);
-
+            
             // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
             const colorNumber = parseInt(player.color.replace('#', ''), 16);
 

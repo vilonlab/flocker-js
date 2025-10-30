@@ -20,6 +20,7 @@ class Zone extends Schema {
 	@type('number') radius = 0;
 	@type('number') x = 0;
 	@type('number') y = 0;
+    @type('boolean') isTarget = false;
 }
 
 class RoomState extends Schema {

@@ -55,6 +55,8 @@ export const config = {
   // Zone rendering settings
   zones: {
     opacity: 0.2,
+    targetWidth: 3,
+    targetColor: 0xFFF700,
   },
 
   // Emote key bindings

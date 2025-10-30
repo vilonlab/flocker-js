@@ -353,9 +353,9 @@ export class ExperimentRoom extends Room<RoomState> {
 		// Countdown every second, but only when round is active
 		this.clock.setInterval(() => {
 			// Only countdown if round is active
-			if (!this.state.roundActive) {
-				return;
-			}
+			// if (!this.state.roundActive) {
+			// 	return;
+			// }
 
 			this.state.roundTime -= 1;
 
