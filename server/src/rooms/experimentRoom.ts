@@ -160,6 +160,11 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.y = config.player.startY;
 		player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
 
+        // randomly select player to be informed
+        if (randomInt(2) === 0) {
+            player.informed = true;
+        }
+
 		// Combine zone and player hues to ensure player colors are distinct from both zones and other players
 		const allUsedHues = new Set([...this.zoneHues, ...this.playerHues]);
 		player.color = this.generateDistinctColor(allUsedHues, config.player.minHueDifference);
@@ -379,7 +384,17 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.y = config.player.startY;
 			player.emote = '';
 			player.zone = -1;
+            // Randomly inform players of the target zone
+            if (randomInt(2) === 0) {
+                player.informed = true;
+            }
+            else {
+                player.informed = false;
+            }
 		});
+
+        // Randomly inform players of the target zone
+        this.state.players
 
         // set new target zone
         this.state.targetZone = randomInt(4);

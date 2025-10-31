@@ -81,7 +81,7 @@ export default class GameScene extends Phaser.Scene {
             // Create an arc (circle) for this zone
             const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
             entity.setDepth(-1);
-            if (this.room.state.targetZone === zone.id) {
+            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.informed) {
                 entity.setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
             }
             this.zoneEntities[zone.id] = entity;
@@ -90,19 +90,16 @@ export default class GameScene extends Phaser.Scene {
         // Listen for targetZone changes to update stroke
         $(this.room.state).listen('targetZone', (value) => {
             console.log('Target zone changed:', value);
+
             // Clear stroke from all zones
             Object.keys(this.zoneEntities).forEach((zoneId) => {
-                if (zoneId === value.toString()) {
+                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
                     this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
                 }
                 else {
                     this.zoneEntities[zoneId].setStrokeStyle(0);
                 }
             });
-            // Add stroke to the new target zone
-            if (value !== undefined && value !== -1 && this.zoneEntities[value.toString()]) {
-                this.zoneEntities[value.toString()].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
-            }
         });
 
         // Handle new players added after we join
@@ -149,6 +146,18 @@ export default class GameScene extends Phaser.Scene {
                 // Update the emote text for all players
                 const textElement = container.getAt(1) as Phaser.GameObjects.Text;
                 textElement.setText(player.emote.toString());
+
+                if (player === this.room.state.players.get(this.room.sessionId)) {
+                    Object.keys(this.zoneEntities).forEach((zoneId) => {
+                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
+                            this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
+                        }
+                        else {
+                            this.zoneEntities[zoneId].setStrokeStyle(0);
+                        }
+                    });
+                }
+
             });
         });
 
@@ -321,6 +330,7 @@ export default class GameScene extends Phaser.Scene {
                 player_points: currentPlayer.points,
                 host: currentPlayer.host,
                 game_status: this.room.state.roundActive,
+                informed: currentPlayer.informed,
             });
         }
 
@@ -351,6 +361,7 @@ export default class GameScene extends Phaser.Scene {
         player_points?: number;
         host?: boolean;
         game_status?: boolean;
+        informed?: boolean;
     }) {
         const fields = {
             'Session ID': params.session_id,
@@ -360,6 +371,7 @@ export default class GameScene extends Phaser.Scene {
             'Player Points': params.player_points?.toString(),
             'Game Status': params.game_status?.toString(),
             'Host': params.host?.toString(),
+            'Informed': params.informed?.toString(),
         };
 
         return Object.entries(fields)

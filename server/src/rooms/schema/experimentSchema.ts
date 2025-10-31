@@ -12,6 +12,7 @@ class Player extends Schema {
     @type('number') zone = -1;
     @type('number') radius = config.player.radius;
     @type('boolean') host = false;
+    @type('boolean') informed = false;
 }
 
 class Zone extends Schema {
