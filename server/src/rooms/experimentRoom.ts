@@ -1,6 +1,6 @@
 import {Room, type Client} from 'colyseus';
 import DataLogger from '../dataLogger';
-import {Player, Zone, RoomState} from './schema/experimentSchema';
+import {Player, Zone, RoomState, Phase} from './schema/experimentSchema';
 import {config} from '../config';
 import { randomInt } from 'node:crypto';
 
@@ -68,10 +68,10 @@ export class ExperimentRoom extends Room<RoomState> {
 				return;
 			}
 
-			// Only allow movement when round is active
-			// if (!this.state.roundActive) {
-			// 	return;
-			// }
+			// Only allow movement when phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE) {
+				return;
+			}
 
 			player.x += data.x;
 			player.y += data.y;
@@ -127,27 +127,12 @@ export class ExperimentRoom extends Room<RoomState> {
 			}
 		});
 
-		// Called when host clicks start round button
-		this.onMessage('startRound', (client, data) => {
-			const player = this.state.players.get(client.sessionId);
-
-			if (!player) {
-				console.error(`Player not found for session ${client.sessionId}`);
-				return;
-			}
-
-			// Only host can start the round
-			if (!player.host) {
-				console.warn(`Player ${player.name} attempted to start round but is not host`);
-				return;
-			}
-
-			// Only start if round is not already active
-			if (!this.state.roundActive) {
-				this.state.roundActive = true;
-				console.log(`Host ${player.name} started the round`);
-			}
-		});
+        this.onMessage('ready', (client, data) => {
+            const player = this.state.players.get(client.sessionId);
+            if (player) {
+                player.ready = true;
+            }
+        });
 	}
 
 	// Called every time a client joins
@@ -193,9 +178,10 @@ export class ExperimentRoom extends Room<RoomState> {
 		if (!this.timerStarted) {
 			this.state.roundTime = this.roundDuration;
             this.state.targetZone = randomInt(4);
-			this.state.roundActive = false;
+            this.state.phase = Phase.WAITING;
 			this.timerStarted = true;
-			this.startRoundTimer(); // Start the timer logic, but it will only countdown when roundActive is true
+			this.startRoundTimer(); // Start the timer logic, but it will only countdown when phase is ACTIVE
+			this.waitForPlayerReady(); // Wait for all players to be ready before starting
 		}
 	}
 
@@ -355,17 +341,18 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.state.roundTime = this.roundDuration;
 		console.log(`Round timer initialized: ${this.roundDuration} seconds`);
 
-		// Countdown every second, but only when round is active
-		this.clock.setInterval(() => {
-			// Only countdown if round is active
-			// if (!this.state.roundActive) {
-			// 	return;
-			// }
+		// Countdown every second, but only when phase is ACTIVE
+		const roundTimer = this.clock.setInterval(() => {
+			// Only countdown if phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE) {
+				return;
+			}
 
 			this.state.roundTime -= 1;
 
 			if (this.state.roundTime <= 0) {
 				console.log('Round ended! Resetting room...');
+                roundTimer.clear();
 				this.endRound();
 			}
 		}, config.round.timerInterval);
@@ -375,15 +362,13 @@ export class ExperimentRoom extends Room<RoomState> {
 	private resetRoom() {
 		console.log('Resetting room state...');
 
-		// Pause the round - host must start the next round
-		this.state.roundActive = false;
-
 		// Reset all players to center and clear their state
 		this.state.players.forEach((player) => {
 			player.x = config.player.startX;
 			player.y = config.player.startY;
 			player.emote = '';
 			player.zone = -1;
+            player.ready = false;
             // Randomly inform players of the target zone
             if (randomInt(2) === 0) {
                 player.informed = true;
@@ -391,16 +376,11 @@ export class ExperimentRoom extends Room<RoomState> {
             else {
                 player.informed = false;
             }
-		});
-
-        // Randomly inform players of the target zone
-        this.state.players
+		})
 
         // set new target zone
         this.state.targetZone = randomInt(4);
 
-		// Reset the timer (but don't start it - waiting for host)
-		this.state.roundTime = this.roundDuration;
 		console.log('Room reset complete. Waiting for host to start next round.');
 	}
 
@@ -415,7 +395,10 @@ export class ExperimentRoom extends Room<RoomState> {
     // Run this function when the round timer ends
     private endRound() {
         this.scorePlayers();
+        this.state.phase = Phase.WAITING;
         this.resetRoom();
+        this.waitForPlayerReady();
+        this.startRoundTimer();
     }
 
     private setNextHost() {
@@ -427,5 +410,27 @@ export class ExperimentRoom extends Room<RoomState> {
 
         nextPlayer.host = true;
         this.hasHost = true;
+    }
+
+    async checkReady(): Promise<boolean> {
+        let allReady: boolean = true;
+        this.state.players.forEach((player) => {
+            allReady = allReady && player.ready
+        });
+        return allReady;
+    }
+
+    private waitForPlayerReady() {
+        const readyCheckInterval = this.clock.setInterval(async () => {
+            const allReady = await this.checkReady();
+            const hasPlayers = this.state.players.size > 0;
+            if (allReady && hasPlayers) {
+                readyCheckInterval.clear();
+                this.state.players.forEach((player) => {
+                    player.ready = false;
+                });
+                this.state.phase = Phase.ACTIVE;
+            }
+        }, 500);
     }
 }

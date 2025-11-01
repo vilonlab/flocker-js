@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import * as Colyseus from 'colyseus.js';
-import { Player, Zone, RoomState } from '../../../server/src/rooms/schema/experimentSchema'
+import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema'
 
 import { BACKEND_HTTP_URL, BACKEND_URL } from "../backend";
 import { config } from '../config';
@@ -24,7 +24,8 @@ export default class GameScene extends Phaser.Scene {
     playersGroup: Phaser.Physics.Arcade.Group;
     debugText: Phaser.GameObjects.Text;
     timerText: Phaser.GameObjects.Text;
-    startButton: Phaser.GameObjects.Text;
+    readyButton: Phaser.GameObjects.Text;
+    readyCount: Phaser.GameObjects.Text;
     isHost: boolean = false;
     // currentPlayer: Phaser.GameObjects.Container;
 
@@ -127,6 +128,8 @@ export default class GameScene extends Phaser.Scene {
             this.physics.world.enable(container);
             const body = container.body as Phaser.Physics.Arcade.Body;
             body.setCircle(player.radius);
+            body.setCollideWorldBounds(true);
+
 
             this.playerEntities[sessionId] = container;
 
@@ -136,6 +139,14 @@ export default class GameScene extends Phaser.Scene {
 
             // Add to players group for collision detection
             this.playersGroup.add(container);
+
+            // Update ready count when a player is added
+            // this.updateReadyCount();
+
+            // Listen for ready status changes
+            // $(player).listen('ready', () => {
+            //     this.updateReadyCount();
+            // });
 
             // listening for server updates
             $(player).onChange(() => {
@@ -147,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
                 const textElement = container.getAt(1) as Phaser.GameObjects.Text;
                 textElement.setText(player.emote.toString());
 
-                if (player === this.room.state.players.get(this.room.sessionId)) {
+                if (player === this.getCurrentPlayer()) {
                     Object.keys(this.zoneEntities).forEach((zoneId) => {
                         if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
                             this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
@@ -162,13 +173,15 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // remove local reference when entity is removed from the server
-        $(this.room.state).players.onRemove((player, sessionId) => {
+        $(this.room.state).players.onRemove((_player, sessionId) => {
             console.log("Player removed:", sessionId);
             const entity = this.playerEntities[sessionId];
             if (entity) {
                 this.playersGroup.remove(entity, true, true); // remove from group and destroy
                 delete this.playerEntities[sessionId]
             }
+            // Update ready count when a player is removed
+            // this.updateReadyCount();
         });
 
         // add debugging text
@@ -184,29 +197,78 @@ export default class GameScene extends Phaser.Scene {
         this.timerText = timerText
 
         // // Add start button (initially hidden)
-        // this.startButton = this.add
-        //     .text(400, 300, 'START ROUND', {
+        this.readyButton = this.add
+            .text(400, 300, 'Ready', {
+                fontSize: '32px',
+                color: '#000000ff',
+                backgroundColor: '#0717ff6e',
+                padding: { x: 20, y: 10 }
+            })
+            .setOrigin(0.5)
+            .setInteractive({ useHandCursor: true })
+            .setVisible(false)
+            .on('pointerdown', () => {
+                const currentPlayer = this.getCurrentPlayer();
+                if (currentPlayer && !currentPlayer.ready) {
+                    this.room.send('ready');
+                    this.readyButton.setText("Ready ✓");
+                    this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
+                }
+            })
+            .setDepth(2);
+        
+        // this.readyCount = this.add
+        //     .text(400, 200, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
         //         fontSize: '32px',
-        //         color: '#00ff00',
-        //         backgroundColor: '#000000',
-        //         padding: { x: 20, y: 10 }
+        //         color: '#000000ff',
+        //         padding: {x: 20, y:10}
         //     })
         //     .setOrigin(0.5)
-        //     .setInteractive({ useHandCursor: true })
-        //     .setVisible(true)
-        //     .on('pointerdown', () => {
-        //         if (this.isHost && !this.room.state.roundActive) {
-        //             this.room.send('startRound');
-        //         }
-        //     })
-        //     .on('pointerover', () => {
-        //         if (this.isHost) {
-        //             this.startButton.setStyle({ color: '#ffffff' });
-        //         }
-        //     })
-        //     .on('pointerout', () => {
-        //         this.startButton.setStyle({ color: '#00ff00' });
-        //     });
+        //     .setVisible(false)
+        //     .setInteractive(false)
+        //     .setDepth(2)
+
+        $(this.room.state).listen('phase', (value) => {
+            const currentPlayer = this.getCurrentPlayer();
+
+            if (value === Phase.WAITING) {
+                this.readyButton.setVisible(true);
+                // this.readyCount.setVisible(true);
+                // this.updateReadyCount();
+                if (currentPlayer && !currentPlayer.ready) {
+                    this.readyButton.setText('Ready');
+                    this.readyButton.setStyle({backgroundColor: '#0717ff6e'});
+                }
+            } else {
+                this.readyButton.setVisible(false);
+                this.readyCount.setVisible(false);
+            }
+        })
+
+        const currentPlayer = this.getCurrentPlayer();
+        if (currentPlayer) {
+            $(currentPlayer).listen('ready', (value) => {
+                if (value) {
+                    this.readyButton.setText("Ready ✓");
+                    this.readyButton.setStyle({backgroundColor: '#00ff006e'});
+                    this.readyButton.disableInteractive();
+                } else {
+                    this.readyButton.setText('Ready');
+                    this.readyButton.setStyle({backgroundColor: '#0717ff6e'});
+                    this.readyButton.setInteractive({useHandCursor: true});
+                }
+
+            });
+        }
+        
+            // .on('pointerover', () => {
+            //     if (this.isHost) {
+            //         this.startButton.setStyle({ color: '#ffffff' });
+            //     }
+            // })
+            // .on('pointerout', () => {
+            //     this.startButton.setStyle({ color: '#00ff00' });
+            // });
 
         // // Listen for roundActive state changes
         // $(this.room.state).listen('roundActive', (value) => {
@@ -291,7 +353,7 @@ export default class GameScene extends Phaser.Scene {
         if (!this.room.state.players) {
             return;
         }
-        const currentPlayer = this.room.state.players.get(this.room.sessionId);
+        const currentPlayer = this.getCurrentPlayer();
         
         if (emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
             this.room.send("emote", { "emote": emote });
@@ -329,8 +391,9 @@ export default class GameScene extends Phaser.Scene {
                 target_zone: this.room.state.targetZone,
                 player_points: currentPlayer.points,
                 host: currentPlayer.host,
-                game_status: this.room.state.roundActive,
+                phase: this.room.state.phase,
                 informed: currentPlayer.informed,
+                ready: currentPlayer.ready,
             });
         }
 
@@ -362,6 +425,8 @@ export default class GameScene extends Phaser.Scene {
         host?: boolean;
         game_status?: boolean;
         informed?: boolean;
+        phase?: Phase;
+        ready?: boolean;
     }) {
         const fields = {
             'Session ID': params.session_id,
@@ -372,11 +437,26 @@ export default class GameScene extends Phaser.Scene {
             'Game Status': params.game_status?.toString(),
             'Host': params.host?.toString(),
             'Informed': params.informed?.toString(),
+            'Phase': params.phase?.toString(),
+            'Player Ready': params.ready?.toString(),
         };
 
         return Object.entries(fields)
             .map(([label, value]) => `\n${label}: ${value || ''}`)
             .join('');
     }
+
+    private getCurrentPlayer() {
+        return this.room.state.players.get(this.room.sessionId);
+    }
+
+    // private updateReadyCount() {
+    //     if (!this.readyCount || !this.room || !this.room.state.players) return;
+
+    //     const readyPlayers = Array.from(this.room.state.players.values()).filter(player => player.ready).length;
+    //     const totalPlayers = this.room.state.players.size;
+
+    //     this.readyCount.setText(`${readyPlayers}/${totalPlayers} ready`);
+    // }
 
 }

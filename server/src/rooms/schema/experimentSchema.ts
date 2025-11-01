@@ -1,6 +1,11 @@
 import {type, Schema, MapSchema} from '@colyseus/schema';
 import {config} from '../../config';
 
+enum Phase {
+    ACTIVE,
+    WAITING
+}
+
 class Player extends Schema {
 	@type('number') x = 0;
 	@type('number') y = 0;
@@ -13,6 +18,7 @@ class Player extends Schema {
     @type('number') radius = config.player.radius;
     @type('boolean') host = false;
     @type('boolean') informed = false;
+    @type('boolean') ready = false;
 }
 
 class Zone extends Schema {
@@ -29,7 +35,8 @@ class RoomState extends Schema {
 	@type('number') roundTime = 0;
 	@type({map: Zone}) zones = new MapSchema<Zone>();
     @type('number') targetZone = -1;
-    @type('boolean') roundActive = false;
+    @type(Phase) phase = Phase.ACTIVE;
 }
 
-export {Player, Zone, RoomState};
+
+export {Player, Zone, RoomState, Phase};
