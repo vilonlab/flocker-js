@@ -12,7 +12,7 @@ export class ExperimentRoom extends Room<RoomState> {
 	private timerStarted = false; // Track if round timer has started
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
-    private hasHost = false;
+    private informedCount = 0;
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
@@ -58,6 +58,13 @@ export class ExperimentRoom extends Room<RoomState> {
 				})),
 			});
 		}, config.logging.snapshotInterval);
+
+        // Ready all players for debugging from Colyseus playground
+        this.onMessage('ready-all', (client, data) => {
+            this.state.players.forEach((player) => {
+                player.ready = true;
+            });
+        });
 
 		// Called every time this room receives a "move" message
 		this.onMessage('move', (client, data) => {
@@ -145,11 +152,6 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.y = config.player.startY;
 		player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
 
-        // randomly select player to be informed
-        if (randomInt(2) === 0) {
-            player.informed = true;
-        }
-
 		// Combine zone and player hues to ensure player colors are distinct from both zones and other players
 		const allUsedHues = new Set([...this.zoneHues, ...this.playerHues]);
 		player.color = this.generateDistinctColor(allUsedHues, config.player.minHueDifference);
@@ -167,14 +169,9 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.textColor = this.getContrastingTextColor(player.color);
 		player.emote = '';
 
-        if (!this.hasHost) {
-            this.hasHost = true;
-            player.host = true;
-        }
-
 		this.state.players.set(client.sessionId, player);
 
-		// Initialize round when first player joins (but don't start it yet)
+		// Initialize round when first player joins
 		if (!this.timerStarted) {
 			this.state.roundTime = this.roundDuration;
             this.state.targetZone = randomInt(4);
@@ -196,26 +193,8 @@ export class ExperimentRoom extends Room<RoomState> {
 			this.emoteTimeouts.delete(client.sessionId);
 		}
 
-    // Set new host if player was host
-        const player = this.state.players.get(client.sessionId)
-        if (player && player.host) {
-            this.hasHost = false;
-            this.setNextHost();
-        }
-
 		this.state.players.delete(client.sessionId);
 	}
-
-	// // Helper method to generate random hex color
-	// private generateRandomColor(): string {
-	// 	const letters = '0123456789ABCDEF';
-	// 	let color = '#';
-	// 	for (let i = 0; i < 6; i++) {
-	// 		color += letters[Math.floor(Math.random() * 16)];
-	// 	}
-
-	// 	return color;
-	// }
 
 	// Helper method to generate distinct colors using HSL color space
 	// This ensures colors are dramatically different in hue
@@ -398,18 +377,8 @@ export class ExperimentRoom extends Room<RoomState> {
         this.state.phase = Phase.WAITING;
         this.resetRoom();
         this.waitForPlayerReady();
+        this.selectInformed();
         this.startRoundTimer();
-    }
-
-    private setNextHost() {
-        const nextPlayer = this.state.players.values().next().value;
-
-        if (!nextPlayer) {
-            return;
-        }
-
-        nextPlayer.host = true;
-        this.hasHost = true;
     }
 
     async checkReady(): Promise<boolean> {
@@ -432,5 +401,25 @@ export class ExperimentRoom extends Room<RoomState> {
                 this.state.phase = Phase.ACTIVE;
             }
         }, 500);
+    }
+
+    private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
+        const playerArray = Array.from(this.state.players.values());
+        const indices = Array.from({length: playerArray.length}, (_, i) => i);
+        
+        // Shuffle array using Fisher-Yates
+        for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+        
+        // Take first maxInformed indices
+        const informedIndices = new Set(indices.slice(0, maxInformed));
+        
+        playerArray.forEach((player, index) => {
+            player.informed = informedIndices.has(index);
+        });
+
+        this.informedCount = maxInformed;
     }
 }

@@ -16,7 +16,8 @@ export const config = {
   round: {
     duration: 15, // seconds
     timerInterval: 1000, // ms - how often to update timer
-    roundPoints: 1, // 
+    roundPoints: 1, // points earned if in target zone
+    informedRatio: 0.5, // percentage of players informed each round
   },
 
   // Zone settings
