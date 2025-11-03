@@ -1,6 +1,7 @@
 import config from '@colyseus/tools';
 import {monitor} from '@colyseus/monitor';
 import {playground} from '@colyseus/playground';
+import type { Server } from '@colyseus/core';
 
 /**
  * Import your Room files
@@ -10,6 +11,9 @@ import DataLogger from './dataLogger';
 import path from 'node:path';
 // Import { ExperimentRoom } from "/home/gus/Documents/Programming/flocker-js/server/src/rooms/experiment"
 
+// Store reference to gameServer for API endpoints
+let gameServerInstance: Server;
+
 export default config({
 
 	initializeGameServer(gameServer) {
@@ -17,6 +21,9 @@ export default config({
          * Define your room handlers:
          */
 		gameServer.define('ExperimentRoom', ExperimentRoom);
+
+		// Store reference for API endpoints
+		gameServerInstance = gameServer;
 	},
 
 	initializeExpress(app) {
@@ -36,6 +43,20 @@ export default config({
 		});
 
 		/**
+         * Clients display webpage
+         */
+		app.get('/clients', (req, res) => {
+			res.sendFile(path.join(__dirname, 'views', 'clients-display.html'));
+		});
+
+		/**
+         * Admin panel webpage
+         */
+		app.get('/admin', (req, res) => {
+			res.sendFile(path.join(__dirname, 'views', 'admin.html'));
+		});
+
+	/**
          * API endpoint to export snapshot data by date range
          */
 		app.get('/api/data/snapshots', (req, res) => {
@@ -85,6 +106,61 @@ export default config({
 			} catch (error) {
 				console.error('Error exporting snapshots:', error);
 				res.status(500).json({error: 'Failed to export snapshots'});
+			}
+		});
+
+		/**
+         * API endpoint to get most recent client data from database snapshot
+         */
+		app.get('/api/clients/current', (req, res) => {
+			try {
+				const dataLogger = DataLogger.getInstance();
+				const db = dataLogger.getDatabase();
+
+				// Get the most recent snapshot from the database
+				const stmt = db.prepare('SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1');
+				const snapshot = stmt.get() as any;
+
+				// If no snapshot exists, return empty
+				if (!snapshot) {
+					res.json({
+						timestamp: 0,
+						serverTime: Date.now(),
+						roomId: 'none',
+						clients: []
+					});
+					return;
+				}
+
+				// Check if snapshot is more than 6 seconds old
+				const currentTime = Date.now();
+				const snapshotAge = currentTime - snapshot.server_time;
+				const maxAge = 6000; // 6 seconds in milliseconds
+
+				// If snapshot is too old, assume no clients are connected
+				if (snapshotAge > maxAge) {
+					res.json({
+						timestamp: snapshot.timestamp,
+						serverTime: currentTime,
+						roomId: snapshot.room_id,
+						clients: []
+					});
+					return;
+				}
+
+				// Parse the players JSON string
+				const clients = JSON.parse(snapshot.players);
+
+				res.json({
+					timestamp: snapshot.timestamp,
+					serverTime: snapshot.server_time,
+					roomId: snapshot.room_id,
+					clients: clients
+				});
+
+			} catch (error) {
+				console.error('Error fetching client data:', error);
+				res.status(500).json({error: 'Failed to fetch client data'});
 			}
 		});
 

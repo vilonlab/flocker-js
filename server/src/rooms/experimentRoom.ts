@@ -54,7 +54,11 @@ export class ExperimentRoom extends Room<RoomState> {
 					name: player.name,
 					color: player.color,
                     textcolor: player.textColor,
-                    emote: player.emote
+                    emote: player.emote,
+                    zone: player.zone,
+                    points: player.points,
+                    informed: player.informed,
+                    ready: player.ready
 				})),
 			});
 		}, config.logging.snapshotInterval);
@@ -377,7 +381,6 @@ export class ExperimentRoom extends Room<RoomState> {
         this.state.phase = Phase.WAITING;
         this.resetRoom();
         this.waitForPlayerReady();
-        this.selectInformed();
         this.startRoundTimer();
     }
 
@@ -401,9 +404,11 @@ export class ExperimentRoom extends Room<RoomState> {
                 this.state.phase = Phase.ACTIVE;
             }
         }, 500);
+        this.selectInformed();
     }
 
     private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
+        maxInformed = Math.ceil(maxInformed);
         const playerArray = Array.from(this.state.players.values());
         const indices = Array.from({length: playerArray.length}, (_, i) => i);
         
