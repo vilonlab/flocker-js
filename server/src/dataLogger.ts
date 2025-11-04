@@ -7,7 +7,7 @@ import Database from 'better-sqlite3';
  * All rooms share a single database connection to avoid write conflicts
  */
 class DataLogger {
-	private static instance: DataLogger | undefined = null;
+	private static instance: DataLogger | undefined = undefined;
 	private static db: Database.Database;
 
 	private constructor() {
@@ -61,24 +61,33 @@ class DataLogger {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS events (
+            CREATE TABLE IF NOT EXISTS player_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                event_type TEXT NOT NULL,
+                snapshot_id INTEGER NOT NULL,
                 timestamp INTEGER NOT NULL,
-                room_id TEXT,
-                session_id TEXT,
-                data JSON,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                room_id TEXT NOT NULL,
+                round_number INTEGER,
+                player_id TEXT NOT NULL,
+                x REAL,
+                y REAL,
+                informed BOOLEAN,
+                additional_data JSON,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_snapshots_room_time
                 ON snapshots(room_id, timestamp);
 
-            CREATE INDEX IF NOT EXISTS idx_events_type_time
-                ON events(event_type, timestamp);
+            CREATE INDEX IF NOT EXISTS idx_player_snapshots_player_time
+                ON player_snapshots(player_id, timestamp);
 
-            CREATE INDEX IF NOT EXISTS idx_events_room
-                ON events(room_id, timestamp);
+            CREATE INDEX IF NOT EXISTS idx_player_snapshots_room_round
+                ON player_snapshots(room_id, round_number);
+
+            CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
+                ON player_snapshots(snapshot_id);
+
         `);
 
 		console.log('Database schema initialized');
@@ -97,49 +106,53 @@ class DataLogger {
 		players: any[];
 	}): void {
 		try {
-			const stmt = DataLogger.db.prepare(`
-                INSERT INTO snapshots (timestamp, server_time, room_id, round_number, phase, target_zone, players)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `);
+			// Use a transaction to ensure both tables are updated atomically
+			const transaction = DataLogger.db.transaction(() => {
+				// Insert into snapshots table
+				const snapshotStmt = DataLogger.db.prepare(`
+                    INSERT INTO snapshots (timestamp, server_time, room_id, round_number, phase, target_zone, players)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `);
 
-			stmt.run(
-				data.timestamp,
-				data.serverTime,
-				data.roomId,
-				data.roundNumber ?? null,
-				data.phase ?? null,
-				data.targetZone ?? null,
-				JSON.stringify(data.players),
-			);
+				const result = snapshotStmt.run(
+					data.timestamp,
+					data.serverTime,
+					data.roomId,
+					data.roundNumber ?? null,
+					data.phase ?? null,
+					data.targetZone ?? null,
+					JSON.stringify(data.players),
+				);
+
+				const snapshotId = result.lastInsertRowid;
+
+				// Insert each player into player_snapshots table
+				const playerStmt = DataLogger.db.prepare(`
+                    INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, round_number, player_id, x, y, informed, additional_data)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+
+				for (const player of data.players) {
+					// Extract common properties and store the rest in additional_data
+					const {id, x, y, informed, ...additionalData} = player;
+
+					playerStmt.run(
+						snapshotId,
+						data.timestamp,
+						data.roomId,
+						data.roundNumber ?? null,
+						id ?? null,
+						x ?? null,
+						y ?? null,
+						informed ?? null,
+						Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
+					);
+				}
+			});
+
+			transaction();
 		} catch (error) {
 			console.error('Failed to log snapshot:', error);
-		}
-	}
-
-	/**
-     * Log a game event (join, leave, phase change, etc.)
-     */
-	logEvent(eventType: string, data: {
-		timestamp?: number;
-		roomId?: string;
-		sessionId?: string;
-		[key: string]: any;
-	}): void {
-		try {
-			const stmt = DataLogger.db.prepare(`
-                INSERT INTO events (event_type, timestamp, room_id, session_id, data)
-                VALUES (?, ?, ?, ?, ?)
-            `);
-
-			stmt.run(
-				eventType,
-				data.timestamp ?? Date.now(),
-				data.roomId ?? null,
-				data.sessionId ?? null,
-				JSON.stringify(data),
-			);
-		} catch (error) {
-			console.error('Failed to log event:', error);
 		}
 	}
 

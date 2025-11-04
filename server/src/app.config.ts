@@ -59,28 +59,64 @@ export default config({
 	/**
          * API endpoint to export snapshot data by date range
          */
-		app.get('/api/data/snapshots', (req, res) => {
+		app.get('/api/data', (req, res) => {
 			try {
 				const dataLogger = DataLogger.getInstance();
 				const db = dataLogger.getDatabase();
 
 				const startDate = req.query.startDate as string | undefined;
 				const endDate = req.query.endDate as string | undefined;
+                const dataType = req.query.dataType as string | undefined;
+                let table = "" as string;
+
+                // Parse dataType and determine which table to query and columns to select
+                let selectClause = '';
+                if (dataType === "STATE") {
+                    table = "snapshots";
+                    selectClause = 'SELECT *';
+                } else if (dataType === "PLAYER") {
+                    table = "player_snapshots";
+                    selectClause = 'SELECT *';
+                } else {
+                    // JOIN: use aliases to avoid column name conflicts
+                    table = "player_snapshots INNER JOIN snapshots ON player_snapshots.snapshot_id = snapshots.id";
+                    selectClause = `SELECT
+                        player_snapshots.id as player_snapshot_id,
+                        player_snapshots.snapshot_id,
+                        player_snapshots.timestamp,
+                        player_snapshots.room_id,
+                        player_snapshots.round_number,
+                        player_snapshots.player_id,
+                        player_snapshots.x,
+                        player_snapshots.y,
+                        player_snapshots.informed,
+                        player_snapshots.additional_data,
+                        player_snapshots.created_at as player_created_at,
+                        snapshots.id as state_snapshot_id,
+                        snapshots.server_time,
+                        snapshots.phase,
+                        snapshots.target_zone,
+                        snapshots.players,
+                        snapshots.created_at as state_created_at`;
+                }
 
 				// Build query with date filtering
-				let query = 'SELECT * FROM snapshots';
+				let query = selectClause + ' FROM ' + table;
 				const params: any[] = [];
 				const conditions: string[] = [];
 
+				// Determine timestamp column name (needs to be qualified for JOINs)
+				const timestampColumn = (dataType === "STATE" || dataType === "PLAYER") ? 'timestamp' : 'player_snapshots.timestamp';
+
 				if (startDate) {
 					const startTimestamp = new Date(startDate).getTime();
-					conditions.push('timestamp >= ?');
+					conditions.push(`${timestampColumn} >= ?`);
 					params.push(startTimestamp);
 				}
 
 				if (endDate) {
 					const endTimestamp = new Date(endDate).getTime();
-					conditions.push('timestamp <= ?');
+					conditions.push(`${timestampColumn} <= ?`);
 					params.push(endTimestamp);
 				}
 
@@ -88,20 +124,43 @@ export default config({
 					query += ' WHERE ' + conditions.join(' AND ');
 				}
 
-				query += ' ORDER BY timestamp ASC';
+				query += ` ORDER BY ${timestampColumn} ASC`;
 
 				const stmt = db.prepare(query);
-				const snapshots = stmt.all(...params) as any[];
+				const results = stmt.all(...params) as any[];
 
-				// Generate CSV
-				let csv = 'id,timestamp,server_time,room_id,round_number,phase,target_zone,players,created_at\n';
+				// Generate CSV based on dataType
+				let csv = '';
+				let filename = '';
 
-				snapshots.forEach((row) => {
-					csv += `${row.id},${row.timestamp},${row.server_time},${row.room_id},${row.round_number || ''},${row.phase || ''},${row.target_zone || ''},"${row.players.replace(/"/g, '""')}",${row.created_at}\n`;
-				});
+				if (dataType === "STATE") {
+					// STATE: snapshots table
+					csv = 'id,timestamp,server_time,room_id,round_number,phase,target_zone,players,created_at\n';
+					results.forEach((row) => {
+						csv += `${row.id},${row.timestamp},${row.server_time},${row.room_id},${row.round_number || ''},${row.phase || ''},${row.target_zone || ''},"${row.players.replace(/"/g, '""')}",${row.created_at}\n`;
+					});
+					filename = 'state-snapshots-export.csv';
+				} else if (dataType === "PLAYER") {
+					// PLAYER: player_snapshots table
+					csv = 'id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,created_at\n';
+					results.forEach((row) => {
+						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
+						csv += `${row.id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.created_at}\n`;
+					});
+					filename = 'player-snapshots-export.csv';
+				} else {
+					// JOIN: both tables combined
+					csv = 'player_snapshot_id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,player_created_at,state_snapshot_id,server_time,phase,target_zone,state_players,state_created_at\n';
+					results.forEach((row) => {
+						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
+						const statePlayers = row.players ? row.players.replace(/"/g, '""') : '';
+						csv += `${row.player_snapshot_id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.player_created_at},${row.state_snapshot_id},${row.server_time},${row.phase || ''},${row.target_zone || ''},"${statePlayers}",${row.state_created_at}\n`;
+					});
+					filename = 'combined-export.csv';
+				}
 
 				res.setHeader('Content-Type', 'text/csv');
-				res.setHeader('Content-Disposition', 'attachment; filename=snapshots-export.csv');
+				res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
 				res.send(csv);
 			} catch (error) {
 				console.error('Error exporting snapshots:', error);

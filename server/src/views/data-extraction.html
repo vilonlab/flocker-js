@@ -54,6 +54,66 @@
             font-size: 14px;
         }
 
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        input[type="radio"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            margin-right: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        input[type="radio"]:hover {
+            border-color: #667eea;
+        }
+
+        input[type="radio"]:checked {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input[type="radio"]:checked::before {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            top: 50%;
+            left: 6px;
+            transform: translateY(-50%);
+        }
+
+        .radio-label {
+            font-weight: 400;
+            color: #555;
+            font-size: 14px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        input[type="radio"]:checked + .radio-label {
+            color: #333;
+            font-weight: 500;
+        }
+
         input[type="date"] {
             width: 100%;
             padding: 12px;
@@ -155,6 +215,24 @@
                 <input type="date" id="endDate" name="endDate" required>
             </div>
 
+            <div class="form-group">
+                <label>Data Type</label>
+                <div class="radio-group">
+                    <div class="radio-option">
+                        <input type="radio" id="state" name="dataType" value="STATE" checked>
+                        <label class="radio-label" for="state">State</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="player" name="dataType" value="PLAYER">
+                        <label class="radio-label" for="player">Player</label>
+                    </div>
+                    <div class="radio-option">
+                        <input type="radio" id="full" name="dataType" value="FULL">
+                        <label class="radio-label" for="full">Full</label>
+                    </div>
+                </div>
+            </div>
+
             <div class="button-group">
                 <button type="submit" class="btn-primary">Download CSV</button>
                 <button type="button" class="btn-secondary" onclick="clearForm()">Clear</button>
@@ -180,11 +258,18 @@
         document.getElementById('endDate').valueAsDate = today;
         document.getElementById('startDate').valueAsDate = sevenDaysAgo;
 
+        // helper to read selected radio value
+        function getSelectedDataType() {
+            const el = document.querySelector('input[name="dataType"]:checked');
+            return el ? el.value : '';
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
+            const dataType = getSelectedDataType();
 
             // Validate dates
             if (new Date(startDate) > new Date(endDate)) {
@@ -196,7 +281,7 @@
                 showMessage('Generating CSV...', 'info');
 
                 // Build URL with query parameters
-                const url = `/api/data/snapshots?startDate=${startDate}&endDate=${endDate}`;
+                const url = `/api/data?dataType=${dataType}&startDate=${startDate}&endDate=${endDate}`;
 
                 // Fetch the CSV
                 const response = await fetch(url);

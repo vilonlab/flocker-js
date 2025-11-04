@@ -45,20 +45,21 @@ export class ExperimentRoom extends Room<RoomState> {
 				timestamp: this.clock.currentTime, // Colyseus simulation time
 				serverTime: Date.now(), // Real-world timestamp
 				roomId: this.roomId,
-				roundNumber: undefined, // Add if you have round tracking
-				phase: undefined, // Add if you have game phases
-				targetZone: undefined, // Add if you have target zones
-				players: [...this.state.players.values()].map(player => ({
+				// roundNumber: this.state.roundNumber,
+				// phase: this.state.phase,
+				targetZone: this.state.targetZone?.toString(),
+				players: [...this.state.players.entries()].map(([sessionId, player]) => ({
+					id: sessionId,
 					x: player.x,
 					y: player.y,
+					informed: player.informed,
 					name: player.name,
 					color: player.color,
-                    textcolor: player.textColor,
-                    emote: player.emote,
-                    zone: player.zone,
-                    points: player.points,
-                    informed: player.informed,
-                    ready: player.ready
+					textColor: player.textColor,
+					emote: player.emote,
+					zone: player.zone,
+					points: player.points,
+					ready: player.ready
 				})),
 			});
 		}, config.logging.snapshotInterval);
