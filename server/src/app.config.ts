@@ -2,6 +2,7 @@ import config from '@colyseus/tools';
 import {monitor} from '@colyseus/monitor';
 import {playground} from '@colyseus/playground';
 import type { Server } from '@colyseus/core';
+import { config as appConfig } from './config';
 
 /**
  * Import your Room files
@@ -20,20 +21,16 @@ export default config({
 		/**
          * Define your room handlers:
          */
-		gameServer.define('ExperimentRoom', ExperimentRoom);
+		gameServer.define('ExperimentRoom', ExperimentRoom)
+            // .maxClients()
+            // .filterBy(['mode'])
+            // .maxClients appConfig.game.maxClients);
 
 		// Store reference for API endpoints
 		gameServerInstance = gameServer;
 	},
 
 	initializeExpress(app) {
-		/**
-         * Bind your custom express routes here:
-         * Read more: https://expressjs.com/en/starter/basic-routing.html
-         */
-		app.get('/hello_world', (request, res) => {
-			res.send('It\'s time to kick ass and chew bubblegum!');
-		});
 
 		/**
          * Data extraction webpage
