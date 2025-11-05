@@ -280,8 +280,11 @@
             try {
                 showMessage('Generating CSV...', 'info');
 
+                // Get client's timezone offset in minutes (negative for UTC+, positive for UTC-)
+                const timezoneOffset = new Date().getTimezoneOffset();
+
                 // Build URL with query parameters
-                const url = `/api/data?dataType=${dataType}&startDate=${startDate}&endDate=${endDate}`;
+                const url = `/api/data?dataType=${dataType}&startDate=${startDate}&endDate=${endDate}&timezoneOffset=${timezoneOffset}`;
 
                 // Fetch the CSV
                 const response = await fetch(url);

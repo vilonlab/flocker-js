@@ -67,6 +67,7 @@ export default config({
 				const startDate = req.query.startDate as string | undefined;
 				const endDate = req.query.endDate as string | undefined;
                 const dataType = req.query.dataType as string | undefined;
+				const timezoneOffset = req.query.timezoneOffset ? parseInt(req.query.timezoneOffset as string) : 0;
                 let table = "" as string;
 
                 // Parse dataType and determine which table to query and columns to select
@@ -109,13 +110,20 @@ export default config({
 				const timestampColumn = (dataType === "STATE" || dataType === "PLAYER") ? 'timestamp' : 'player_snapshots.timestamp';
 
 				if (startDate) {
-					const startTimestamp = new Date(startDate).getTime();
+					// Parse date as UTC midnight, then adjust for client's timezone
+					// Client sends date-only string and timezone offset
+					// We want start of day (00:00:00) in client's local timezone
+					const utcTimestamp = new Date(startDate + 'T00:00:00.000Z').getTime();
+					const startTimestamp = utcTimestamp + (timezoneOffset * 60 * 1000);
 					conditions.push(`${timestampColumn} >= ?`);
 					params.push(startTimestamp);
 				}
 
 				if (endDate) {
-					const endTimestamp = new Date(endDate).getTime();
+					// Parse date as UTC end of day, then adjust for client's timezone
+					// We want end of day (23:59:59.999) in client's local timezone
+					const utcTimestamp = new Date(endDate + 'T23:59:59.999Z').getTime();
+					const endTimestamp = utcTimestamp + (timezoneOffset * 60 * 1000);
 					conditions.push(`${timestampColumn} <= ?`);
 					params.push(endTimestamp);
 				}
@@ -125,6 +133,9 @@ export default config({
 				}
 
 				query += ` ORDER BY ${timestampColumn} ASC`;
+
+                console.log('Querying database:' + query)
+                console.log('Parameters:' + params)
 
 				const stmt = db.prepare(query);
 				const results = stmt.all(...params) as any[];

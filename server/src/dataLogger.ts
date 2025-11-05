@@ -54,7 +54,6 @@ class DataLogger {
                 timestamp INTEGER NOT NULL,
                 server_time INTEGER NOT NULL,
                 room_id TEXT NOT NULL,
-                round_number INTEGER,
                 phase TEXT,
                 target_zone TEXT,
                 players JSON NOT NULL,
@@ -66,7 +65,6 @@ class DataLogger {
                 snapshot_id INTEGER NOT NULL,
                 timestamp INTEGER NOT NULL,
                 room_id TEXT NOT NULL,
-                round_number INTEGER,
                 player_id TEXT NOT NULL,
                 x REAL,
                 y REAL,
@@ -81,9 +79,6 @@ class DataLogger {
 
             CREATE INDEX IF NOT EXISTS idx_player_snapshots_player_time
                 ON player_snapshots(player_id, timestamp);
-
-            CREATE INDEX IF NOT EXISTS idx_player_snapshots_room_round
-                ON player_snapshots(room_id, round_number);
 
             CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
                 ON player_snapshots(snapshot_id);
@@ -100,7 +95,6 @@ class DataLogger {
 		timestamp: number;
 		serverTime: number;
 		roomId: string;
-		roundNumber?: number;
 		phase?: string;
 		targetZone?: string;
 		players: any[];
@@ -110,44 +104,43 @@ class DataLogger {
 			const transaction = DataLogger.db.transaction(() => {
 				// Insert into snapshots table
 				const snapshotStmt = DataLogger.db.prepare(`
-                    INSERT INTO snapshots (timestamp, server_time, room_id, round_number, phase, target_zone, players)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO snapshots (timestamp, server_time, room_id, phase, target_zone, players)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 `);
 
 				const result = snapshotStmt.run(
 					data.timestamp,
 					data.serverTime,
 					data.roomId,
-					data.roundNumber ?? null,
 					data.phase ?? null,
 					data.targetZone ?? null,
 					JSON.stringify(data.players),
 				);
 
-				const snapshotId = result.lastInsertRowid;
+				// const snapshotId = result.lastInsertRowid;
 
-				// Insert each player into player_snapshots table
-				const playerStmt = DataLogger.db.prepare(`
-                    INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, round_number, player_id, x, y, informed, additional_data)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                `);
+				// // Insert each player into player_snapshots table
+				// const playerStmt = DataLogger.db.prepare(`
+                //     INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, player_id, x, y, informed, additional_data)
+                //     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                // `);
 
-				for (const player of data.players) {
-					// Extract common properties and store the rest in additional_data
-					const {id, x, y, informed, ...additionalData} = player;
+				// for (const player of data.players) {
+				// 	// Extract common properties and store the rest in additional_data
+				// 	const {id, x, y, informed, ...additionalData} = player;
 
-					playerStmt.run(
-						snapshotId,
-						data.timestamp,
-						data.roomId,
-						data.roundNumber ?? null,
-						id ?? null,
-						x ?? null,
-						y ?? null,
-						informed ?? null,
-						Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
-					);
-				}
+				// 	playerStmt.run(
+				// 		snapshotId,
+				// 		data.timestamp,
+				// 		data.roomId,
+				// 		id ?? null,
+				// 		x ?? null,
+				// 		y ?? null,
+				// 		informed ?? null,
+				// 		Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
+				// 	);
+				// }
+                console.log('Snapshot:', result)
 			});
 
 			transaction();
