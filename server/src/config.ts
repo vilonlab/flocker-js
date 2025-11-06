@@ -49,6 +49,11 @@ export const config = {
     },
   },
 
+  game : {
+    maxClients: 6,
+    minClients: 2,
+  },
+
   // Logging settings
   logging: {
     snapshotInterval: 2000, // ms - how often to log snapshots

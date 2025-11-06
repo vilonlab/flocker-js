@@ -7,12 +7,15 @@ import { randomInt } from 'node:crypto';
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
 	logger = DataLogger.getInstance();
+    maxClients: number = config.game.maxClients;
+
 	private zoneHues = new Set<number>(); // Track hues used by zones
 	private playerHues = new Set<number>(); // Track hues used by players
 	private timerStarted = false; // Track if round timer has started
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private informedCount = 0;
+    private playerLock = true;
 
 	onCreate(options: any) {
 		console.log('ExperimentRoom created!', options);
@@ -81,7 +84,7 @@ export class ExperimentRoom extends Room<RoomState> {
 			}
 
 			// Only allow movement when phase is ACTIVE
-			if (this.state.phase !== Phase.ACTIVE) {
+			if (this.state.phase !== Phase.ACTIVE || this.playerLock) {
 				return;
 			}
 
@@ -120,6 +123,11 @@ export class ExperimentRoom extends Room<RoomState> {
 				return;
 			}
 
+            // Only allow emotes when phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE || this.playerLock) {
+				return;
+			}
+
 			player.emote = data.emote;
 
 			// Check if this player already has an active emote timeout
@@ -141,6 +149,11 @@ export class ExperimentRoom extends Room<RoomState> {
 
         this.onMessage('ready', (client, data) => {
             const player = this.state.players.get(client.sessionId);
+
+            if (this.playerLock) {
+                return;
+            }
+
             if (player) {
                 player.ready = true;
             }
@@ -156,6 +169,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.x = config.player.startX; // Start at center
 		player.y = config.player.startY;
 		player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
+
 
 		// Combine zone and player hues to ensure player colors are distinct from both zones and other players
 		const allUsedHues = new Set([...this.zoneHues, ...this.playerHues]);
@@ -175,6 +189,9 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.emote = '';
 
 		this.state.players.set(client.sessionId, player);
+
+        // Prevent player movement if less than minimum connected clients
+        this.checkPlayerCount();
 
 		// Initialize round when first player joins
 		if (!this.timerStarted) {
@@ -197,6 +214,8 @@ export class ExperimentRoom extends Room<RoomState> {
 			emoteTimeout.clear();
 			this.emoteTimeouts.delete(client.sessionId);
 		}
+
+        this.checkPlayerCount();
 
 		this.state.players.delete(client.sessionId);
 	}
@@ -380,6 +399,7 @@ export class ExperimentRoom extends Room<RoomState> {
     private endRound() {
         this.scorePlayers();
         this.state.phase = Phase.WAITING;
+        this.checkPlayerCount();
         this.resetRoom();
         this.waitForPlayerReady();
         this.startRoundTimer();
@@ -427,5 +447,14 @@ export class ExperimentRoom extends Room<RoomState> {
         });
 
         this.informedCount = maxInformed;
+    }
+
+    private checkPlayerCount() {
+        if (this.clients.length < config.game.minClients && this.state.phase === Phase.WAITING) {
+            this.playerLock = true;
+        }
+        else {
+            this.playerLock = false;
+        }
     }
 }

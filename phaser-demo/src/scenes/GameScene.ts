@@ -47,6 +47,8 @@ export default class GameScene extends Phaser.Scene {
             'FOUR': Phaser.Input.Keyboard.KeyCodes.FOUR,
         }) as { [key: string]: Phaser.Input.Keyboard.Key };
 
+        this.cameras.main.setBackgroundColor(0xFFFFFF);
+
         // connect with the room
         await this.connect();
 
