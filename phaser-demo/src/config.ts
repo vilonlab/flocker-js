@@ -59,6 +59,12 @@ export const config = {
     targetColor: 0xFFF700,
   },
 
+  // Lobby settings
+  lobby: {
+    numPlayers: 25,
+    speed: 4,
+  },
+
   // Emote key bindings
   emotes: {
     ONE: '?',

@@ -10,7 +10,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: gameConfig.game.width,
   height: gameConfig.game.height,
   parent: 'game-container',
-  backgroundColor: gameConfig.game.backgroundColor,
+//   backgroundColor: gameConfig.game.backgroundColor,
   physics: {
     default: 'arcade',
     arcade: {
