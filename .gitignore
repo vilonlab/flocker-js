@@ -1,3 +1,8 @@
+# test deploy script
+scp_to_server.sh
+filelist.txt
+rsync-exclude.txt
+
 # local notes
 *notes.md
 
