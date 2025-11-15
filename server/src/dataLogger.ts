@@ -1,6 +1,8 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
+import {v4 as uuidv4} from 'uuid'
+import { transcode } from 'node:buffer';
 
 /**
  * SQLite-based DataLogger using Singleton pattern
@@ -72,6 +74,15 @@ class DataLogger {
                 additional_data JSON,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS player_data (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT,
+                color TEXT,
+                text_color TEXT,
+                points INTEGER,
+                last_connection DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE INDEX IF NOT EXISTS idx_snapshots_room_time
@@ -148,6 +159,84 @@ class DataLogger {
 			console.error('Failed to log snapshot:', error);
 		}
 	}
+
+    /**
+     * Capture player metadata
+     */
+    updatePlayerData(data: {
+		id?: string;
+		name?: string;
+		color?: string;
+		text_color?: string;
+		points?: number;
+		last_connection?: string;
+	}): string {
+        // if no id, generate one and store it
+        let id = "";
+
+        if (data.id) {
+            id = data.id;
+            const transaction = DataLogger.db.transaction(() => {
+                const stmt = DataLogger.db.prepare(`
+                    UPDATE player_data
+                    SET
+                        name = COALESCE(?, name),
+                        color = COALESCE(?, color),
+                        text_color = COALESCE(?, text_color),
+                        points = COALESCE(?, points),
+                        last_connection = COALESCE(?, last_connection)
+                    WHERE id = ?
+                `);
+                stmt.run(
+                data.name ?? null,
+                data.color ?? null,
+                data.text_color ?? null,
+                data.points ?? null,
+                data.last_connection ?? null,
+                id
+                );
+            });
+            transaction();
+        } else {
+            id = uuidv4();
+            const transaction = DataLogger.db.transaction(() => {
+                const stmt = DataLogger.db.prepare(`
+                    INSERT INTO player_data
+                    (id, name, color, text_color, points)
+                    VALUES (?, ?, ?, ?, ?)
+                `);
+                stmt.run(
+                    id,
+                    data.name ?? null,
+                    data.color ?? null,
+                    data.text_color ?? null,
+                    data.points ?? null,
+                );
+            });
+            transaction();
+        }
+        return id;
+    }
+
+    /**
+     * Dedicated method to update player score
+     */
+    addPlayerScore(id: string, score_delta: number) {
+        const transaction = DataLogger.db.transaction(() => {
+            const scoreStmt = DataLogger.db.prepare(`
+                UPDATE player_data
+                SET score = score + ?
+                WHERE id = ?
+            `);
+
+            const result = scoreStmt.run(
+                score_delta,
+                id
+            )
+
+        });
+        transaction();
+    }
 
 	/**
      * Close database connection (call on server shutdown)
