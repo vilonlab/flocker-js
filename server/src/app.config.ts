@@ -3,6 +3,9 @@ import {monitor} from '@colyseus/monitor';
 import {playground} from '@colyseus/playground';
 import type { Server } from '@colyseus/core';
 import { config as appConfig } from './config';
+import cookieParser from 'cookie-parser';
+import { v4 as uuidv4 } from 'uuid';
+import winston from "winston";
 
 /**
  * Import your Room files
@@ -16,6 +19,21 @@ import path from 'node:path';
 let gameServerInstance: Server;
 
 export default config({
+
+    options: {
+        logger: winston.createLogger({
+            level: 'info',
+            format: winston.format.json(),
+            defaultMeta: { service: 'user-service' },
+            transports: [
+                // - Write all logs with importance level of `error` or less to `error.log`
+                // - Write all logs with importance level of `info` or less to `combined.log`
+                //
+                new winston.transports.File({ filename: 'error.log', level: 'error' }),
+                new winston.transports.File({ filename: 'combined.log' }),
+            ],
+        })
+    },
 
 	initializeGameServer(gameServer) {
 		/**
@@ -31,18 +49,20 @@ export default config({
 	},
 
 	initializeExpress(app) {
+		// Enable cookie parsing
+		app.use(cookieParser());
 
 		/**
          * Data extraction webpage
          */
-		app.get('/data', (req, res) => {
+		app.get('/admin/data', (req, res) => {
 			res.sendFile(path.join(__dirname, 'views', 'data-extraction.html'));
 		});
 
 		/**
          * Clients display webpage
          */
-		app.get('/clients', (req, res) => {
+		app.get('/admin/clients', (req, res) => {
 			res.sendFile(path.join(__dirname, 'views', 'clients-display.html'));
 		});
 
@@ -56,7 +76,7 @@ export default config({
 	/**
          * API endpoint to export snapshot data by date range
          */
-		app.get('/api/data', (req, res) => {
+		app.get('/admin/api/data', (req, res) => {
 			try {
 				const dataLogger = DataLogger.getInstance();
 				const db = dataLogger.getDatabase();
@@ -179,7 +199,7 @@ export default config({
 		/**
          * API endpoint to get most recent client data from database snapshot
          */
-		app.get('/api/clients/current', (req, res) => {
+		app.get('/admin/api/clients/current', (req, res) => {
 			try {
 				const dataLogger = DataLogger.getInstance();
 				const db = dataLogger.getDatabase();
@@ -232,11 +252,42 @@ export default config({
 		});
 
 		/**
+         * API endpoint to get or set unique client ID
+         */
+		app.get('/admin/api/client-id', (req, res) => {
+            const dataLogger = DataLogger.getInstance();
+			try {
+				let clientId = req.cookies?.clientId;
+
+				if (!clientId) {
+					// Generate a new unique ID
+                    clientId = dataLogger.updatePlayerData({});
+					// clientId = uuidv4();
+					// Set cookie with 1 year expiration
+					res.cookie('clientId', clientId, {
+						maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year in milliseconds
+						httpOnly: false, // Allow client-side JavaScript to read the cookie
+						sameSite: 'lax',
+						secure: process.env.NODE_ENV === 'production' // Use secure cookies in production
+					});
+					console.log('Generated new client ID:', clientId);
+				} else {
+					console.log('Existing client ID:', clientId);
+				}
+
+				res.json({ clientId });
+			} catch (error) {
+				console.error('Error handling client ID:', error);
+				res.status(500).json({ error: 'Failed to handle client ID' });
+			}
+		});
+
+		/**
          * Use @colyseus/playground
          * (It is not recommended to expose this route in a production environment)
          */
 		if (process.env.NODE_ENV !== 'production') {
-			app.use('/', playground());
+			app.use('/admin/playground', playground());
 		}
 
 		/**
@@ -244,7 +295,7 @@ export default config({
          * It is recommended to protect this route with a password
          * Read more: https://docs.colyseus.io/tools/monitor/#restrict-access-to-the-panel-using-a-password
          */
-		app.use('/monitor', monitor());
+		app.use('/admin/monitor', monitor());
 	},
 
 	beforeListen() {

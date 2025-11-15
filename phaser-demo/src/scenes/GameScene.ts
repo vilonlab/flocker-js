@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import Phaser, { NONE } from 'phaser';
 import * as Colyseus from 'colyseus.js';
 import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema'
 
@@ -449,7 +449,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     private getCurrentPlayer() {
-        return this.room.state.players.get(this.room.sessionId);
+        if (this.room.state.players) {
+             return this.room.state.players.get(this.room.sessionId);
+        }
+        return null;
     }
 
     // private updateReadyCount() {
