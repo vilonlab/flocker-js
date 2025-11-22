@@ -115,6 +115,9 @@ export default class GameScene extends Phaser.Scene {
             // Create an arc (circle) for the player
             const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
 
+            // Add a drop shadow to the player
+            circle.postFX?.addShadow(0, 3, 0.05, 1, 0x000000, 10, 0.5);
+
             // Create text to display the emote in the middle of the circle
             const text = this.add.text(0, 0, player.emote.toString(), {
                 fontSize: config.ui.playerText.fontSize,
