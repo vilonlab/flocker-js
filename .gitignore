@@ -1,7 +1,8 @@
-# test deploy script
+# deploy scripts
 scp_to_server.sh
 filelist.txt
 rsync-exclude.txt
+pi*
 
 # local notes
 *notes.md
@@ -9,9 +10,6 @@ rsync-exclude.txt
 # Databases
 *.db*
 data/
-
-# Deploy script for development
-pi*
 
 # Parcel 
 .parcel-cache
