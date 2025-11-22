@@ -186,7 +186,7 @@
             const metaInfo = document.getElementById('metaInfo');
 
             try {
-                const response = await fetch('/api/clients/current');
+                const response = await fetch('/app/admin/api/clients/current');
 
                 if (!response.ok) {
                     throw new Error('Failed to fetch client data');
