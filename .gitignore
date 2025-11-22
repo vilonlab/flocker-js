@@ -3,6 +3,7 @@ scp_to_server.sh
 filelist.txt
 rsync-exclude.txt
 pi*
+*.sh
 
 # local notes
 *notes.md
