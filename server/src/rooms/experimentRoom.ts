@@ -14,7 +14,6 @@ export class ExperimentRoom extends Room<RoomState> {
 	private timerStarted = false; // Track if round timer has started
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
-    private informedCount = 0;
     private playerLock = true;
 
 	onCreate(options: any) {
@@ -387,6 +386,15 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log('Room reset complete. Waiting for host to start next round.');
 	}
 
+    private setInformed(maxInformed: number=1) {
+        let informedCount = 0;
+        const playerArray = Array.from(this.state.players.keys());
+        const prob = maxInformed / this.state.players.size;
+        while (informedCount < maxInformed) {
+            
+        }
+    }
+
     private scorePlayers() {
         this.state.players.forEach((player) => {
             if (player.zone === this.state.targetZone) {
@@ -397,10 +405,19 @@ export class ExperimentRoom extends Room<RoomState> {
 
     // Run this function when the round timer ends
     private endRound() {
+
+        // Determine round scores, give winning players points
         this.scorePlayers();
+
+        // Set room phase to WAITING, preventing the room counter from starting
         this.state.phase = Phase.WAITING;
+
+        // Prevent player movement if less than min players in room
         this.checkPlayerCount();
+
+        // Reset player variables, choose new target zone, update informed
         this.resetRoom();
+
         this.waitForPlayerReady();
         this.startRoundTimer();
     }

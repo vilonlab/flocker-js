@@ -114,6 +114,7 @@ export default class GameScene extends Phaser.Scene {
 
             // Create an arc (circle) for the player
             const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
+            circle.postFX.addShadow(0, 0, 0.1, 1, 0x000000, 6, 1)
 
             // Add a drop shadow to the player
             circle.postFX?.addShadow(0, 3, 0.05, 1, 0x000000, 10, 0.5);
