@@ -386,13 +386,23 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log('Room reset complete. Waiting for host to start next round.');
 	}
 
-    private setInformed(maxInformed: number=1) {
-        let informedCount = 0;
-        const playerArray = Array.from(this.state.players.keys());
-        const prob = maxInformed / this.state.players.size;
-        while (informedCount < maxInformed) {
-            
+    private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
+        maxInformed = Math.ceil(maxInformed);
+        const playerArray = Array.from(this.state.players.values());
+        const indices = Array.from({length: playerArray.length}, (_, i) => i);
+        
+        // Shuffle array using Fisher-Yates
+        for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
         }
+        
+        // Take first maxInformed indices
+        const informedIndices = new Set(indices.slice(0, maxInformed));
+        
+        playerArray.forEach((player, index) => {
+            player.informed = informedIndices.has(index);
+        });
     }
 
     private scorePlayers() {
@@ -422,6 +432,20 @@ export class ExperimentRoom extends Room<RoomState> {
         this.startRoundTimer();
     }
 
+    // Run this function at the end of end round, separate logic for starting new game
+    private startRount() {
+
+        // Select informed players
+        this.selectInformed();
+
+        // Wait for all players to be ready
+        this.waitForPlayerReady();
+
+        // Start round and timer 
+        this.startRoundTimer();
+
+    }
+
     async checkReady(): Promise<boolean> {
         let allReady: boolean = true;
         this.state.players.forEach((player) => {
@@ -443,27 +467,6 @@ export class ExperimentRoom extends Room<RoomState> {
             }
         }, 500);
         this.selectInformed();
-    }
-
-    private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
-        maxInformed = Math.ceil(maxInformed);
-        const playerArray = Array.from(this.state.players.values());
-        const indices = Array.from({length: playerArray.length}, (_, i) => i);
-        
-        // Shuffle array using Fisher-Yates
-        for (let i = indices.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [indices[i], indices[j]] = [indices[j], indices[i]];
-        }
-        
-        // Take first maxInformed indices
-        const informedIndices = new Set(indices.slice(0, maxInformed));
-        
-        playerArray.forEach((player, index) => {
-            player.informed = informedIndices.has(index);
-        });
-
-        this.informedCount = maxInformed;
     }
 
     private checkPlayerCount() {
