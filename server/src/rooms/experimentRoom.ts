@@ -156,6 +156,13 @@ export class ExperimentRoom extends Room<RoomState> {
             if (player) {
                 player.ready = true;
             }
+
+            // Calculate ready count
+            const readyCount = Array.from(this.state.players.values()).filter(p => p.ready).length;
+            const totalCount = this.state.players.size;
+
+            // Broadcast to ALL clients including the sender
+            this.broadcast("ready-count", { ready: readyCount, total: totalCount });
         });
 	}
 
@@ -310,11 +317,11 @@ export class ExperimentRoom extends Room<RoomState> {
 
     // Helper method to check player zone
     private checkZone(player_x: number, player_y: number, player_radius?: number): number {
-        let zone_id: number = -1; 
+        let zone_id: number = -1;
         if (!player_radius) {
             player_radius = 0;
         }
-        this.state.zones.forEach((zone, key) => {
+        this.state.zones.forEach((zone) => {
             if (Math.hypot(Math.abs(player_x - zone.x), Math.abs(player_y - zone.y)) <= (zone.radius + player_radius)) {
                 zone_id = zone.id;
             }
@@ -419,17 +426,23 @@ export class ExperimentRoom extends Room<RoomState> {
         // Determine round scores, give winning players points
         this.scorePlayers();
 
-        // Set room phase to WAITING, preventing the room counter from starting
-        this.state.phase = Phase.WAITING;
+        // Set room phase to SCOREBOARD to display the scoreboard
+        this.state.phase = Phase.SCOREBOARD;
 
-        // Prevent player movement if less than min players in room
-        this.checkPlayerCount();
+        // Wait for scoreboard duration before transitioning to next round
+        this.clock.setTimeout(() => {
+            // Set room phase to WAITING, preventing the room counter from starting
+            this.state.phase = Phase.WAITING;
 
-        // Reset player variables, choose new target zone, update informed
-        this.resetRoom();
+            // Prevent player movement if less than min players in room
+            this.checkPlayerCount();
 
-        // Start next round
-        this.startRound();
+            // Reset player variables, choose new target zone, update informed
+            this.resetRoom();
+
+            // Start next round
+            this.startRound();
+        }, config.round.scoreboardDuration);
     }
 
     // Run this function at the end of end round, separate logic for starting new game

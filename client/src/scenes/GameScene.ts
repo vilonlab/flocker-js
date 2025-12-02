@@ -25,7 +25,8 @@ export default class GameScene extends Phaser.Scene {
     debugText: Phaser.GameObjects.Text;
     timerText: Phaser.GameObjects.Text;
     readyButton: Phaser.GameObjects.Text;
-    readyCount: Phaser.GameObjects.Text;
+    readyText: Phaser.GameObjects.Text;
+    scoreboardContainer: Phaser.GameObjects.Container;
     isHost: boolean = false;
     // currentPlayer: Phaser.GameObjects.Container;
 
@@ -51,6 +52,13 @@ export default class GameScene extends Phaser.Scene {
 
         // connect with the room
         await this.connect();
+
+        // Listen for ready count updates from server
+        this.room.onMessage("ready-count", (message) => {
+            if (this.readyText) {
+                this.readyText.setText(`${message.ready}/${message.total} ready`);
+            }
+        });
 
         // Create physics group for players
         this.playersGroup = this.physics.add.group();
@@ -108,13 +116,13 @@ export default class GameScene extends Phaser.Scene {
         // Handle new players added after we join
         $(this.room.state).players.onAdd((player, sessionId) => {
             console.log("New player added:", sessionId, player);
+
             
             // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
             const colorNumber = parseInt(player.color.replace('#', ''), 16);
 
             // Create an arc (circle) for the player
             const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
-            circle.postFX.addShadow(0, 0, 0.1, 1, 0x000000, 6, 1)
 
             // Add a drop shadow to the player
             circle.postFX?.addShadow(0, 3, 0.05, 1, 0x000000, 10, 0.5);
@@ -202,52 +210,72 @@ export default class GameScene extends Phaser.Scene {
             .setStyle({ color: config.ui.timer.color, fontSize: config.ui.timer.fontSize })
         this.timerText = timerText
 
-        // // Add start button (initially hidden)
-        this.readyButton = this.add
-            .text(400, 300, 'Ready', {
-                fontSize: '32px',
-                color: '#000000ff',
-                backgroundColor: '#0717ff6e',
-                padding: { x: 20, y: 10 }
-            })
-            .setOrigin(0.5)
-            .setInteractive({ useHandCursor: true })
-            .setVisible(false)
-            .on('pointerdown', () => {
-                const currentPlayer = this.getCurrentPlayer();
-                if (currentPlayer && !currentPlayer.ready) {
-                    this.room.send('ready');
-                    this.readyButton.setText("Ready ✓");
-                    this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
-                }
-            })
-            .setDepth(2);
-        
-        // this.readyCount = this.add
-        //     .text(400, 200, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
-        //         fontSize: '32px',
-        //         color: '#000000ff',
-        //         padding: {x: 20, y:10}
-        //     })
-        //     .setOrigin(0.5)
-        //     .setVisible(false)
-        //     .setInteractive(false)
-        //     .setDepth(2)
-
         $(this.room.state).listen('phase', (value) => {
             const currentPlayer = this.getCurrentPlayer();
 
             if (value === Phase.WAITING) {
-                this.readyButton.setVisible(true);
-                // this.readyCount.setVisible(true);
-                // this.updateReadyCount();
+                if (!this.readyButton) {
+                    this.readyButton = this.add
+                        .text(200, 100, 'Ready', {
+                            fontSize: '32px',
+                            color: '#000000ff',
+                            backgroundColor: '#0717ff6e',
+                            padding: { x: 20, y: 10 }
+                        })
+                        .setOrigin(0.5)
+                        .setInteractive({ useHandCursor: true })
+                        .on('pointerdown', () => {
+                            const currentPlayer = this.getCurrentPlayer();
+                            if (currentPlayer && !currentPlayer.ready) {
+                                this.room.send('ready');
+                                this.readyButton.setText("Ready ✓");
+                                this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
+                            }
+                        })
+                        .setDepth(10)
+                        .setVisible(false);
+                } else {
+                    this.readyButton.setVisible(true);
+                }
+
+                if (!this.readyText) {
+                    this.readyText = this.add
+                        .text(400, 100, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
+                            fontSize: '32px',
+                            color: '#000000ff',
+                            backgroundColor: '#0717ff6e',
+                            padding: { x: 20, y: 10 }
+                        })
+                        .setOrigin(0.5)
+                        .setDepth(10)
+                        .setVisible(true);
+                } else {
+                    this.readyText.setVisible(true);
+                }
+
+                // Update ready count display
+                const readyCount = Array.from(this.room.state.players.values()).filter(p => p.ready).length;
+                const totalCount = this.room.state.players.size;
+                this.readyText.setText(`${readyCount}/${totalCount} ready`);
+
                 if (currentPlayer && !currentPlayer.ready) {
                     this.readyButton.setText('Ready');
                     this.readyButton.setStyle({backgroundColor: '#0717ff6e'});
                 }
+                // Hide scoreboard when transitioning to WAITING
+                if (this.scoreboardContainer) {
+                    this.scoreboardContainer.setVisible(false);
+                }
+            } else if (value === Phase.SCOREBOARD) {
+                // Show scoreboard when phase becomes SCOREBOARD
+                this.showScoreboard();
             } else {
-                this.readyButton.setVisible(false);
-                this.readyCount.setVisible(false);
+                // Hide scoreboard for other phases
+                if (this.scoreboardContainer) {
+                    this.scoreboardContainer.setVisible(false);
+                    this.readyButton.setVisible(false);
+                    this.readyText.setVisible(false);
+                }
             }
         })
 
@@ -266,37 +294,6 @@ export default class GameScene extends Phaser.Scene {
 
             });
         }
-        
-            // .on('pointerover', () => {
-            //     if (this.isHost) {
-            //         this.startButton.setStyle({ color: '#ffffff' });
-            //     }
-            // })
-            // .on('pointerout', () => {
-            //     this.startButton.setStyle({ color: '#00ff00' });
-            // });
-
-        // // Listen for roundActive state changes
-        // $(this.room.state).listen('roundActive', (value) => {
-        //     console.log('Round active changed:', value);
-        //     // Hide button when round is active
-        //     if (this.isHost) {
-        //         this.startButton.setVisible(!value);
-        //     }
-        // });
-
-        // // Listen for changes to current player's host status
-        // const currentPlayer = this.room.state.players.get(this.room.sessionId);
-        // if (currentPlayer) {
-        //     this.isHost = currentPlayer.host;
-        //     this.startButton.setVisible(this.isHost && !this.room.state.roundActive);
-
-        //     $(currentPlayer).listen('host', (value) => {
-        //         console.log('Host status changed:', value);
-        //         this.isHost = value;
-        //         this.startButton.setVisible(this.isHost && !this.room.state.roundActive);
-        //     });
-        // }
     }
 
     async connect() {
@@ -467,5 +464,148 @@ export default class GameScene extends Phaser.Scene {
 
     //     this.readyCount.setText(`${readyPlayers}/${totalPlayers} ready`);
     // }
+
+    private showScoreboard() {
+        // Clear existing scoreboard if it exists
+        if (this.scoreboardContainer) {
+            this.scoreboardContainer.removeAll(true);
+        } else {
+            this.scoreboardContainer = this.add.container(0, 0);
+        }
+
+        // Get all players and sort by points (descending)
+        const players = Array.from(this.room.state.players.entries())
+            .map(([sessionId, player]) => ({
+                sessionId,
+                name: player.name,
+                points: player.points,
+                color: player.color,
+                textColor: player.textColor
+            }))
+            .sort((a, b) => b.points - a.points);
+
+        // Scoreboard dimensions and positioning
+        const centerX = config.game.width / 2;
+        const centerY = config.game.height / 2;
+        const boardWidth = 400;
+        const boardHeight = 60 + players.length * 50;
+        const startY = centerY - boardHeight / 2;
+
+        // Add ready button if it doesn't already exist
+        if (!this.readyButton) {
+            this.readyButton = this.add
+                .text(200, startY - 30, 'Ready', {
+                    fontSize: '32px',
+                    color: '#000000ff',
+                    backgroundColor: '#0717ff6e',
+                    padding: { x: 20, y: 10 }
+                })
+                .setOrigin(0.5)
+                .setInteractive({ useHandCursor: true })
+                .setVisible(false)
+                .on('pointerdown', () => {
+                    const currentPlayer = this.getCurrentPlayer();
+                    if (currentPlayer && !currentPlayer.ready) {
+                        this.room.send('ready');
+                        this.readyButton.setText("Ready ✓");
+                        this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
+                    }
+                })
+                .setDepth(10);
+        }
+
+        if (!this.readyText) {
+            this.readyText = this.add
+                .text(400, 300, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
+                    fontSize: '32px',
+                    color: '#000000ff',
+                    backgroundColor: '#0717ff6e',
+                    padding: { x: 20, y: 10 }
+                })
+                .setOrigin(0.5)
+                .setVisible(false)
+                .setDepth(10);
+        }
+
+        // Create background
+        const background = this.add.rectangle(
+            centerX,
+            centerY,
+            boardWidth,
+            boardHeight,
+            0xffffff,
+            0.95
+        );
+        background.setStrokeStyle(4, 0x000000);
+        this.scoreboardContainer.add(background);
+
+        // Create title
+        const title = this.add.text(centerX, startY + 30, 'SCOREBOARD', {
+            fontSize: '32px',
+            color: '#000000',
+            fontStyle: 'bold'
+        });
+        title.setOrigin(0.5);
+        this.scoreboardContainer.add(title);
+
+        // Create player rows
+        players.forEach((player, index) => {
+            const rowY = startY + 70 + index * 50;
+
+            // Player rank
+            const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
+                fontSize: '24px',
+                color: '#000000'
+            });
+            rank.setOrigin(0, 0.5);
+            this.scoreboardContainer.add(rank);
+
+            const colorBox = this.add.rectangle(
+                centerX,
+                centerY,
+                boardWidth,
+                rowY,
+                parseInt(player.color.replace('#', ''), 16),
+                1
+            )
+
+            // Player color indicator (small circle)
+            const colorCircle = this.add.arc(
+                centerX - 130,
+                rowY,
+                12,
+                0,
+                360,
+                false,
+                parseInt(player.color.replace('#', ''), 16),
+                1
+            );
+            this.scoreboardContainer.add(colorCircle);
+
+            // Player name
+            const nameText = this.add.text(centerX - 100, rowY, player.name, {
+                fontSize: '24px',
+                color: '#000000'
+            });
+            nameText.setOrigin(0, 0.5);
+            this.scoreboardContainer.add(nameText);
+
+            // Player points
+            const pointsText = this.add.text(centerX + 160, rowY, `${player.points} pts`, {
+                fontSize: '24px',
+                color: '#000000',
+                fontStyle: 'bold'
+            });
+            pointsText.setOrigin(1, 0.5);
+            this.scoreboardContainer.add(pointsText);
+        });
+
+        // Set depth to ensure scoreboard is on top
+        this.scoreboardContainer.setDepth(10);
+        this.scoreboardContainer.setVisible(true);
+
+        this.readyButton.setVisible(true);
+        this.readyText.setVisible(true);
+    }
 
 }

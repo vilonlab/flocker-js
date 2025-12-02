@@ -3,7 +3,8 @@ import {config} from '../../config';
 
 enum Phase {
     ACTIVE,
-    WAITING
+    WAITING,
+    SCOREBOARD
 }
 
 class Player extends Schema {
