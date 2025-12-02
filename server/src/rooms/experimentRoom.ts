@@ -428,12 +428,12 @@ export class ExperimentRoom extends Room<RoomState> {
         // Reset player variables, choose new target zone, update informed
         this.resetRoom();
 
-        this.waitForPlayerReady();
-        this.startRoundTimer();
+        // Start next round
+        this.startRound();
     }
 
     // Run this function at the end of end round, separate logic for starting new game
-    private startRount() {
+    private startRound() {
 
         // Select informed players
         this.selectInformed();
@@ -443,7 +443,6 @@ export class ExperimentRoom extends Room<RoomState> {
 
         // Start round and timer 
         this.startRoundTimer();
-
     }
 
     async checkReady(): Promise<boolean> {
