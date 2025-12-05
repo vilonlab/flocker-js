@@ -4,6 +4,7 @@ filelist.txt
 rsync-exclude.txt
 pi*
 *.sh
+rsync-*
 
 # local notes
 *notes.md

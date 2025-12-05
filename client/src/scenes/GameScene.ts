@@ -63,23 +63,23 @@ export default class GameScene extends Phaser.Scene {
         // Create physics group for players
         this.playersGroup = this.physics.add.group();
 
-        // Add collider to prevent players from overlapping
-        this.physics.add.collider(this.playersGroup, this.playersGroup, () => {
-            // Check if room exists before accessing it
-            if (!this.room) return;
+        // // Add collider to prevent players from overlapping
+        // this.physics.add.collider(this.playersGroup, this.playersGroup, () => {
+        //     // Check if room exists before accessing it
+        //     if (!this.room) return;
 
-            const currentTime = this.time.now;
-            const timeSinceLastCollisionUpdate = currentTime - this.lastCollisionPositionUpdateTime;
+        //     const currentTime = this.time.now;
+        //     const timeSinceLastCollisionUpdate = currentTime - this.lastCollisionPositionUpdateTime;
 
-            // Only send position update if enough time has passed
-            if (timeSinceLastCollisionUpdate >= this.collisionUpdateInterval) {
-                const playerEntity = this.playerEntities[this.room.sessionId];
-                if (playerEntity) {
-                    this.room.send("position", { "x": playerEntity.x, "y": playerEntity.y });
-                    this.lastCollisionPositionUpdateTime = currentTime;
-                }
-            }
-        });
+        //     // Only send position update if enough time has passed
+        //     if (timeSinceLastCollisionUpdate >= this.collisionUpdateInterval) {
+        //         const playerEntity = this.playerEntities[this.room.sessionId];
+        //         if (playerEntity) {
+        //             this.room.send("position", { "x": playerEntity.x, "y": playerEntity.y });
+        //             this.lastCollisionPositionUpdateTime = currentTime;
+        //         }
+        //     }
+        // });
 
         const $ = Colyseus.getStateCallbacks(this.room);
 
@@ -100,7 +100,6 @@ export default class GameScene extends Phaser.Scene {
 
         // Listen for targetZone changes to update stroke
         $(this.room.state).listen('targetZone', (value) => {
-            console.log('Target zone changed:', value);
 
             // Clear stroke from all zones
             Object.keys(this.zoneEntities).forEach((zoneId) => {
@@ -233,7 +232,7 @@ export default class GameScene extends Phaser.Scene {
                             }
                         })
                         .setDepth(10)
-                        .setVisible(false);
+                        .setVisible(true);
                 } else {
                     this.readyButton.setVisible(true);
                 }

@@ -51,7 +51,7 @@ export const config = {
   },
 
   game : {
-    maxClients: 6,
+    maxClients: 12,
     minClients: 2,
   },
 

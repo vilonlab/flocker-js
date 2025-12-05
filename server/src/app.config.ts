@@ -254,7 +254,7 @@ export default config({
 		/**
          * API endpoint to get or set unique client ID
          */
-		app.get('/admin/api/client-id', (req, res) => {
+		app.get('/api/client-id', (req, res) => {
             const dataLogger = DataLogger.getInstance();
 			try {
 				let clientId = req.cookies?.clientId;
