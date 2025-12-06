@@ -39,11 +39,11 @@ export default class MMScene extends Phaser.Scene {
         // Add text showing connected players
         this.playerCountText = this.add.text(
             config.game.width / 2,
-            config.game.height / 3,
+            config.game.height / 5,
             `Players Connected: ${this.room.state.players.size}/${this.room.state.minClients}`,
             {
                 fontFamily: 'Arial, Helvetica, sans-serif',
-                fontSize: '64px',
+                fontSize: '32px',
                 fontStyle: 'bold',
                 color: '#ffffff'
             }
@@ -89,7 +89,10 @@ export default class MMScene extends Phaser.Scene {
 
     updatePlayerList() {
         if (!this.playerList || !this.room) return;
-        
+
+        // Clear existing player list elements
+        this.playerList.removeAll(true);
+
         // Get all players
         const players = Array.from(this.room.state.players.entries())
             .map(([sessionId, player]) => ({
@@ -103,13 +106,15 @@ export default class MMScene extends Phaser.Scene {
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
         const boardWidth = 400;
-        const boardHeight = 60 + players.length * 50;
-        const startY = centerY - boardHeight / 2;
+        const boardHeight = players.length * 50;
+        const startY = centerY;
+        const fixedTopY = 200;
+        const backgroundCenterY = fixedTopY + (boardHeight / 2);
 
         // Create background
         const background = this.add.rectangle(
             centerX,
-            centerY,
+            backgroundCenterY,
             boardWidth,
             boardHeight,
             0xffffff,
@@ -120,7 +125,7 @@ export default class MMScene extends Phaser.Scene {
 
         // Create player rows
         players.forEach((player, index) => {
-            const rowY = startY + 70 + index * 50;
+            const rowY = fixedTopY + (index * 50) + 25;
 
             // Player color indicator (small circle)
             const colorCircle = this.add.arc(

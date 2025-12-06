@@ -278,8 +278,12 @@ export default class GameScene extends Phaser.Scene {
                 // Hide scoreboard for other phases
                 if (this.scoreboardContainer) {
                     this.scoreboardContainer.setVisible(false);
-                    this.readyButton.setVisible(false);
+                }
+                if (this.readyText) {
                     this.readyText.setVisible(false);
+                }
+                if (this.readyButton) {
+                    this.readyButton.setVisible(false);
                 }
             }
         })
@@ -352,16 +356,35 @@ export default class GameScene extends Phaser.Scene {
             emote = config.emotes.FOUR;
         }
 
-        // only send movement if there's a delta and round is active
+        // only send movement if there's a delta
+        const currentPlayer = this.getCurrentPlayer();
+        const playerEntity = this.playerEntities[this.room.sessionId]
+        
+        if (playerEntity) {
+            const body = playerEntity.body as Phaser.Physics.Arcade.Body;
+            if(body?.blocked.down && dy > 0) {
+                dy = 0;
+            }
+            if(body?.blocked.up && dy < 0) {
+                dy = 0;
+            }
+            if (body?.blocked.left && dx < 0) {
+                dx = 0;
+            }
+            if (body?.blocked.right && dx > 0) {
+                dx = 0;
+            }
+        }
+
         if (dx !== 0 || dy !== 0) {
-            this.room.send("move", { "x": dx, "y": dy });
+            console.log("Sending move message: x: ", dx * this.playerSpeed, ", y: ", dy * this.playerSpeed);
+            this.room.send("move", { "x": dx * this.playerSpeed, "y": dy * this.playerSpeed });
         }
 
         // Check if selected emote is different from current character emote
         if (!this.room.state.players) {
             return;
         }
-        const currentPlayer = this.getCurrentPlayer();
         
         if (emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
             this.room.send("emote", { "emote": emote });
@@ -482,7 +505,7 @@ export default class GameScene extends Phaser.Scene {
         // Scoreboard dimensions and positioning
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
-        const boardWidth = 400;
+        const boardWidth = 500;
         const boardHeight = 60 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
@@ -577,7 +600,7 @@ export default class GameScene extends Phaser.Scene {
             this.scoreboardContainer.add(nameText);
 
             // Player points
-            const pointsText = this.add.text(centerX + 160, rowY, `${player.points} pts`, {
+            const pointsText = this.add.text(centerX + 210, rowY, `${player.points} pts`, {
                 fontSize: '24px',
                 color: '#000000',
                 fontStyle: 'bold'
