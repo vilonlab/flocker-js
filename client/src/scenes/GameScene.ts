@@ -61,7 +61,9 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // Create physics group for players
-        this.playersGroup = this.physics.add.group();
+        this.playersGroup = this.physics.add.group({
+            collideWorldBounds: true,
+        });
 
         // // Add collider to prevent players from overlapping
         // this.physics.add.collider(this.playersGroup, this.playersGroup, () => {
@@ -558,15 +560,6 @@ export default class GameScene extends Phaser.Scene {
             });
             rank.setOrigin(0, 0.5);
             this.scoreboardContainer.add(rank);
-
-            const colorBox = this.add.rectangle(
-                centerX,
-                centerY,
-                boardWidth,
-                rowY,
-                parseInt(player.color.replace('#', ''), 16),
-                1
-            )
 
             // Player color indicator (small circle)
             const colorCircle = this.add.arc(
