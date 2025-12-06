@@ -27,8 +27,6 @@ export default class GameScene extends Phaser.Scene {
     readyButton: Phaser.GameObjects.Text;
     readyText: Phaser.GameObjects.Text;
     scoreboardContainer: Phaser.GameObjects.Container;
-    isHost: boolean = false;
-    // currentPlayer: Phaser.GameObjects.Container;
 
     constructor() {
         super({ key: "experiment" });
@@ -37,7 +35,7 @@ export default class GameScene extends Phaser.Scene {
     // preload() {
     // }
 
-    async create() {
+    async create(data?: { room?: Colyseus.Room<RoomState> }) {
         this.cursorKeys = this.input.keyboard!.createCursorKeys();
 
         // Create keys object that can recognize number keys 1-4
@@ -50,8 +48,14 @@ export default class GameScene extends Phaser.Scene {
 
         this.cameras.main.setBackgroundColor(0xFFFFFF);
 
-        // connect with the room
-        await this.connect();
+        // Check if room was passed from MMScene, otherwise connect directly
+        if (data?.room) {
+            this.room = data.room;
+            console.log("Using room from MMScene:", this.room.roomId);
+        } else {
+            // Fallback: connect directly (for testing or direct scene access)
+            await this.connect();
+        }
 
         // Listen for ready count updates from server
         this.room.onMessage("ready-count", (message) => {
@@ -394,7 +398,6 @@ export default class GameScene extends Phaser.Scene {
                 room_id: this.room.roomId,
                 target_zone: this.room.state.targetZone,
                 player_points: currentPlayer.points,
-                host: currentPlayer.host,
                 phase: this.room.state.phase,
                 informed: currentPlayer.informed,
                 ready: currentPlayer.ready,
@@ -426,22 +429,22 @@ export default class GameScene extends Phaser.Scene {
         room_id?: string;
         target_zone?: number;
         player_points?: number;
-        host?: boolean;
-        game_status?: boolean;
         informed?: boolean;
-        phase?: Phase;
+        phase?: number;
         ready?: boolean;
     }) {
+        var phase_string = "";
+        if (params.phase !== undefined) {
+            phase_string = Phase[params.phase];
+        }
         const fields = {
             'Session ID': params.session_id,
             'Room ID': params.room_id,
             'Zone': params.zone_id?.toString(),
             'Target Zone': params.target_zone?.toString(),
             'Player Points': params.player_points?.toString(),
-            'Game Status': params.game_status?.toString(),
-            'Host': params.host?.toString(),
             'Informed': params.informed?.toString(),
-            'Phase': params.phase?.toString(),
+            'Phase': phase_string?.toString(),
             'Player Ready': params.ready?.toString(),
         };
 
@@ -456,15 +459,6 @@ export default class GameScene extends Phaser.Scene {
         }
         return null;
     }
-
-    // private updateReadyCount() {
-    //     if (!this.readyCount || !this.room || !this.room.state.players) return;
-
-    //     const readyPlayers = Array.from(this.room.state.players.values()).filter(player => player.ready).length;
-    //     const totalPlayers = this.room.state.players.size;
-
-    //     this.readyCount.setText(`${readyPlayers}/${totalPlayers} ready`);
-    // }
 
     private showScoreboard() {
         // Clear existing scoreboard if it exists
@@ -541,7 +535,7 @@ export default class GameScene extends Phaser.Scene {
         this.scoreboardContainer.add(background);
 
         // Create title
-        const title = this.add.text(centerX, startY + 30, 'SCOREBOARD', {
+        const title = this.add.text(centerX, startY + 30, 'flocker', {
             fontSize: '32px',
             color: '#000000',
             fontStyle: 'bold'

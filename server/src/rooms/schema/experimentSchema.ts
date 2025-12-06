@@ -4,7 +4,8 @@ import {config} from '../../config';
 enum Phase {
     ACTIVE,
     WAITING,
-    SCOREBOARD
+    SCOREBOARD,
+	LOBBY,
 }
 
 class Player extends Schema {
@@ -37,6 +38,7 @@ class RoomState extends Schema {
 	@type({map: Zone}) zones = new MapSchema<Zone>();
     @type('number') targetZone = -1;
     @type(Phase) phase = Phase.ACTIVE;
+    @type('number') minClients = config.game.minClients;
 }
 
 
