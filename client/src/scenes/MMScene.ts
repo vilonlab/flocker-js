@@ -1,0 +1,166 @@
+import Phaser from "phaser";
+import * as Colyseus from 'colyseus.js';
+import { BACKEND_URL } from "../backend";
+import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema';
+import { config } from '../config';
+
+
+export default class MMScene extends Phaser.Scene {
+
+    // Colyseus properties
+    room: Colyseus.Room<RoomState>;
+    client: Colyseus.Client;
+    playerCountText: Phaser.GameObjects.Text;
+    playerList: Phaser.GameObjects.Container;
+
+    constructor() {
+        super({ key: "mm" });
+    }
+
+    preload() {
+        return;
+    }
+
+    async create() {
+        // Set background color
+        this.cameras.main.setBackgroundColor('#000000');
+
+        // Connect to server
+        await this.connect();
+
+        // Wait for room state to be ready before accessing it
+        await new Promise<void>((resolve) => {
+            this.room.onStateChange.once((state) => {
+                console.log("Room state initialized:", state);
+                resolve();
+            });
+        });
+
+        // Add text showing connected players
+        this.playerCountText = this.add.text(
+            config.game.width / 2,
+            config.game.height / 5,
+            `Players Connected: ${this.room.state.players.size}/${this.room.state.minClients}`,
+            {
+                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontSize: '32px',
+                fontStyle: 'bold',
+                color: '#ffffff'
+            }
+        );
+        this.playerCountText.setOrigin(0.5, 0.5) // Center the text on its position
+            .setDepth(10); // Above all other background sprites
+
+        // Add list of connected players
+        this.playerList = this.add.container(0, 0);
+        this.playerList.setDepth(11);
+        this.playerList.setVisible(true);
+
+        // Listen for player count changes
+        const $ = Colyseus.getStateCallbacks(this.room);
+        $(this.room.state).players.onAdd(() => {
+            this.updatePlayerCount();
+            this.updatePlayerList();
+        });
+        $(this.room.state).players.onRemove(() => {
+            this.updatePlayerCount();
+            this.updatePlayerList();
+        });
+    }
+
+    async connect() {
+        this.client = new Colyseus.Client(BACKEND_URL);
+
+        try {
+            this.room = await this.client.joinOrCreate("ExperimentRoom", {});
+            console.log("Connected to room:", this.room.roomId);
+        } catch (e) {
+            console.error("Connection error:", e);
+        }
+    }
+
+    updatePlayerCount() {
+        if (this.playerCountText && this.room) {
+            this.playerCountText.setText(
+                `Players Connected: ${this.room.state.players.size}/${this.room.state.minClients}`
+            );
+        }
+    }
+
+    updatePlayerList() {
+        if (!this.playerList || !this.room) return;
+
+        // Clear existing player list elements
+        this.playerList.removeAll(true);
+
+        // Get all players
+        const players = Array.from(this.room.state.players.entries())
+            .map(([sessionId, player]) => ({
+                sessionId,
+                name: player.name,
+                color: player.color,
+                textColor: player.textColor
+            }))
+
+        // List dimensions and positioning
+        const centerX = config.game.width / 2;
+        const centerY = config.game.height / 2;
+        const boardWidth = 400;
+        const boardHeight = players.length * 50;
+        const startY = centerY;
+        const fixedTopY = 200;
+        const backgroundCenterY = fixedTopY + (boardHeight / 2);
+
+        // Create background
+        const background = this.add.rectangle(
+            centerX,
+            backgroundCenterY,
+            boardWidth,
+            boardHeight,
+            0xffffff,
+            0.95
+        );
+        background.setStrokeStyle(4, 0x000000);
+        this.playerList.add(background);
+
+        // Create player rows
+        players.forEach((player, index) => {
+            const rowY = fixedTopY + (index * 50) + 25;
+
+            // Player color indicator (small circle)
+            const colorCircle = this.add.arc(
+                centerX - 130,
+                rowY,
+                12,
+                0,
+                360,
+                false,
+                parseInt(player.color.replace('#', ''), 16),
+                1
+            );
+            this.playerList.add(colorCircle);
+
+            // Player name
+            const nameText = this.add.text(centerX - 100, rowY, player.name, {
+                fontSize: '24px',
+                color: '#000000'
+            });
+            nameText.setOrigin(0, 0.5);
+            this.playerList.add(nameText);
+        });
+    }
+
+    update(): void {
+        if (!this.room) return;
+
+        if (this.room.state.phase === Phase.WAITING) {
+            // Pass the room object to GameScene
+            this.runScene('experiment', { room: this.room });
+        }
+    }
+
+    runScene(key: string, data?: any) {
+        this.scene.start(key, data);
+        this.scene.stop("mm");
+    }
+}

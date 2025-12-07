@@ -52,7 +52,7 @@ export const config = {
 
   game : {
     maxClients: 12,
-    minClients: 2,
+    minClients: 3,
   },
 
   // Logging settings

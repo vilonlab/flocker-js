@@ -7,7 +7,7 @@ pi*
 rsync-*
 
 # local notes
-*notes.md
+*.md
 
 # Databases
 *.db*

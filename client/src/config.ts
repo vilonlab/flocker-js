@@ -22,7 +22,7 @@ export const config = {
 
   // Player settings
   player: {
-    speed: 200,
+    speed: 2,
     radius: 20, // Default player radius (can be overridden by server)
   },
 

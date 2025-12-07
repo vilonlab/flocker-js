@@ -97,7 +97,7 @@ export default class LobbyScene extends Phaser.Scene {
             joinButton.setStyle({ backgroundColor: '#333333' });
         });
         joinButton.on('pointerdown', () => {
-            this.runScene('experiment');
+            this.runScene('mm');
         });
 
         // create background sprites
@@ -169,6 +169,7 @@ export default class LobbyScene extends Phaser.Scene {
     }
 
     runScene(key: string) {
-        this.game.scene.switch("lobby", key)
+        this.scene.start(key);
+        this.scene.stop("lobby");
     }
 }
