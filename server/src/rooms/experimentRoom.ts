@@ -39,8 +39,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.x = config.player.startX; // Start at center
 		player.y = config.player.startY;
 		// player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
-		const adjective = faker.word.adjective({ length: { min: 5, max: 8 }, strategy: "closest" });
-		const noun = faker.word.noun({ length: { min: 5, max: 8 }, strategy: "closest" });
+		const adjective = faker.word.adjective({ length: { min: 5, max: 7 }, strategy: "closest" });
+		const noun = faker.word.noun({ length: { min: 5, max: 7 }, strategy: "closest" });
 		// Capitalize first letter of each word
 		const capitalizedAdjective = adjective.charAt(0).toUpperCase() + adjective.slice(1);
 		const capitalizedNoun = noun.charAt(0).toUpperCase() + noun.slice(1);
