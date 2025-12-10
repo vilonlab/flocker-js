@@ -1,7 +1,6 @@
 import Phaser, { NONE } from 'phaser';
 import * as Colyseus from 'colyseus.js';
-import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema'
-
+import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema';
 import { BACKEND_HTTP_URL, BACKEND_URL } from "../backend";
 import { config } from '../config';
 
@@ -24,6 +23,9 @@ export default class GameScene extends Phaser.Scene {
     playersGroup: Phaser.Physics.Arcade.Group;
     debugText: Phaser.GameObjects.Text;
     timerText: Phaser.GameObjects.Text;
+    roundText: Phaser.GameObjects.Text;
+    nameText: Phaser.GameObjects.Text;
+    uiContainer: Phaser.GameObjects.Container;
     readyButton: Phaser.GameObjects.Text;
     readyText: Phaser.GameObjects.Text;
     scoreboardContainer: Phaser.GameObjects.Container;
@@ -122,7 +124,6 @@ export default class GameScene extends Phaser.Scene {
         $(this.room.state).players.onAdd((player, sessionId) => {
             console.log("New player added:", sessionId, player);
 
-            
             // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
             const colorNumber = parseInt(player.color.replace('#', ''), 16);
 
@@ -130,7 +131,7 @@ export default class GameScene extends Phaser.Scene {
             const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
 
             // Add a drop shadow to the player
-            circle.postFX?.addShadow(0, 3, 0.05, 1, 0x000000, 10, 0.5);
+            // circle.postFX?.addShadow(0, 0.5, 0.05, 1, 0x000000, 10, 0.5);
 
             // Create text to display the emote in the middle of the circle
             const text = this.add.text(0, 0, player.emote.toString(), {
@@ -204,24 +205,64 @@ export default class GameScene extends Phaser.Scene {
         });
 
         // add debugging text
-        const debugText = this.add
-            .text(config.ui.debug.position.x, config.ui.debug.position.y, "debug text here")
-            .setStyle({ color: config.ui.debug.color, fontSize: config.ui.debug.fontSize })
-        this.debugText = debugText
+        if (config.ui.debug.show) {
+            const debugText = this.add
+                .text(config.ui.debug.position.x, config.ui.debug.position.y, "debug text here")
+                .setStyle({ color: config.ui.debug.color, fontSize: config.ui.debug.fontSize })
+            this.debugText = debugText
+        }
 
-        // add round timer text
-        const timerText = this.add
-            .text(config.ui.timer.position.x, config.ui.timer.position.y, config.ui.timer.prefix)
-            .setStyle({ color: config.ui.timer.color, fontSize: config.ui.timer.fontSize })
-        this.timerText = timerText
+        // Create UI container with name, round, and timer text
+        const player = this.getCurrentPlayer();
+
+        // Create text elements with black color and stroke
+        this.nameText = this.add.text(0, 0, player ? player.name : 'Player', {
+            color: '#000000',
+            fontSize: '26px',
+            fontStyle: 'bold'
+        }).setStroke('#ffffff', 3);
+
+        this.roundText = this.add.text(0, 25, 'Round: 1/--', {
+            color: '#000000',
+            fontSize: '24px'
+        }).setStroke('#ffffff', 3);
+
+        this.timerText = this.add.text(0, 50, '00', {
+            color: '#000000',
+            fontSize: '24px'
+        }).setStroke('#ffffff', 3);
+
+        // Create container and add text elements
+        this.uiContainer = this.add.container(
+            config.game.width - 10,
+            config.game.height - 10,
+            [this.nameText, this.roundText, this.timerText]
+        );
+
+        // Position container in bottom right
+        this.uiContainer.setDepth(100);
+
+        // Align text to the right by setting their origin
+        this.nameText.setOrigin(1, 1);
+        this.roundText.setOrigin(1, 1);
+        this.timerText.setOrigin(1, 1);
+
+        // Adjust positions relative to container
+        this.nameText.setPosition(0, -50);
+        this.roundText.setPosition(0, -25);
+        this.timerText.setPosition(0, 0);
 
         $(this.room.state).listen('phase', (value) => {
             const currentPlayer = this.getCurrentPlayer();
+            console.log(`Phase changed to `, Phase[value]);
+
+            // Update round text
+            this.roundText.text = `Round ${this.room.state.roundNumber + 1}/${this.room.state.totalRounds}`;
 
             if (value === Phase.WAITING) {
                 if (!this.readyButton) {
                     this.readyButton = this.add
-                        .text(200, 100, 'Ready', {
+                        .text(config.game.width / 2, 200, 'Ready', {
                             fontSize: '32px',
                             color: '#000000ff',
                             backgroundColor: '#0717ff6e',
@@ -245,7 +286,7 @@ export default class GameScene extends Phaser.Scene {
 
                 if (!this.readyText) {
                     this.readyText = this.add
-                        .text(400, 100, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
+                        .text(config.game.width / 2, 100, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
                             fontSize: '32px',
                             color: '#000000ff',
                             backgroundColor: '#0717ff6e',
@@ -274,6 +315,8 @@ export default class GameScene extends Phaser.Scene {
             } else if (value === Phase.SCOREBOARD) {
                 // Show scoreboard when phase becomes SCOREBOARD
                 this.showScoreboard();
+            } else if (value === Phase.END) {
+                this.runScene('end', {room: this.room});
             } else {
                 // Hide scoreboard for other phases
                 if (this.scoreboardContainer) {
@@ -414,7 +457,7 @@ export default class GameScene extends Phaser.Scene {
         // }
 
         // update debug text
-        if (currentPlayer) {
+        if (currentPlayer && this.debugText) {
             this.debugText.text = this.generateDebugText({
                 session_id: this.room.sessionId,
                 zone_id: currentPlayer.zone,
@@ -424,10 +467,17 @@ export default class GameScene extends Phaser.Scene {
                 phase: this.room.state.phase,
                 informed: currentPlayer.informed,
                 ready: currentPlayer.ready,
+                distance: currentPlayer.distance,
+                emoteCount: currentPlayer.emoteCount,
+                name: currentPlayer.name,
             });
         }
 
-        this.timerText.text = "" + this.room.state.roundTime;
+        if (this.room.state.roundTime < 10) {
+            this.timerText.text = "0" + this.room.state.roundTime;
+        } else {
+            this.timerText.text = "" + this.room.state.roundTime;
+        }
 
         //         // Check if enough time has passed since last update
         //         const timeSinceLastUpdate = time - this.lastPositionUpdateTime;
@@ -455,6 +505,9 @@ export default class GameScene extends Phaser.Scene {
         informed?: boolean;
         phase?: number;
         ready?: boolean;
+        distance?: number;
+        emoteCount?: number;
+        name?: string;
     }) {
         var phase_string = "";
         if (params.phase !== undefined) {
@@ -469,6 +522,9 @@ export default class GameScene extends Phaser.Scene {
             'Informed': params.informed?.toString(),
             'Phase': phase_string?.toString(),
             'Player Ready': params.ready?.toString(),
+            'Distance traveled': params.distance?.toString(),
+            'Emote count': params.emoteCount?.toString(),
+            'Name': params.name?.toString()
         };
 
         return Object.entries(fields)
@@ -613,8 +669,13 @@ export default class GameScene extends Phaser.Scene {
         this.scoreboardContainer.setDepth(10);
         this.scoreboardContainer.setVisible(true);
 
-        this.readyButton.setVisible(true);
-        this.readyText.setVisible(true);
+        // this.readyButton.setVisible(true);
+        // this.readyText.setVisible(true);
+    }
+
+    runScene(key: string, data?: any) {
+        this.scene.start(key, data);
+        this.scene.stop("experiment");
     }
 
 }
