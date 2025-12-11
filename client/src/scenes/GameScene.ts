@@ -28,6 +28,7 @@ export default class GameScene extends Phaser.Scene {
     uiContainer: Phaser.GameObjects.Container;
     readyButton: Phaser.GameObjects.Text;
     readyText: Phaser.GameObjects.Text;
+    scoreText: Phaser.GameObjects.Text;
     scoreboardContainer: Phaser.GameObjects.Container;
 
     constructor() {
@@ -222,21 +223,26 @@ export default class GameScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setStroke('#ffffff', 3);
 
-        this.roundText = this.add.text(0, 25, 'Round: 1/--', {
+        this.scoreText = this.add.text(0, 25, '0 points', {
+            color: '#000000',
+            fontSize: '24px',
+        }).setStroke('#ffffff', 3); 
+
+        this.roundText = this.add.text(0, 50, 'Round: 1/--', {
             color: '#000000',
             fontSize: '24px'
         }).setStroke('#ffffff', 3);
 
-        this.timerText = this.add.text(0, 50, '00', {
+        this.timerText = this.add.text(0, 75, '00', {
             color: '#000000',
             fontSize: '24px'
         }).setStroke('#ffffff', 3);
 
-        // Create container and add text elements
+        // Create container and add text emove my method that determines the player score intlements
         this.uiContainer = this.add.container(
             config.game.width - 10,
             config.game.height - 10,
-            [this.nameText, this.roundText, this.timerText]
+            [this.nameText, this.scoreText, this.roundText, this.timerText]
         );
 
         // Position container in bottom right
@@ -246,9 +252,11 @@ export default class GameScene extends Phaser.Scene {
         this.nameText.setOrigin(1, 1);
         this.roundText.setOrigin(1, 1);
         this.timerText.setOrigin(1, 1);
+        this.scoreText.setOrigin(1, 1);
 
         // Adjust positions relative to container
-        this.nameText.setPosition(0, -50);
+        this.nameText.setPosition(0, -75);
+        this.scoreText.setPosition(0, -50);
         this.roundText.setPosition(0, -25);
         this.timerText.setPosition(0, 0);
 
@@ -258,6 +266,14 @@ export default class GameScene extends Phaser.Scene {
 
             // Update round text
             this.roundText.text = `Round ${this.room.state.roundNumber + 1}/${this.room.state.totalRounds}`;
+
+            // Update score text
+            if (this.room.state.isCollectiveScoring) {
+                this.scoreText.text = `${this.room.state.collectiveScore} points`;
+            } else {
+                this.scoreText.text = `${currentPlayer?.points} points`;
+            }
+            
 
             if (value === Phase.WAITING) {
                 if (!this.readyButton) {
@@ -473,11 +489,7 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        if (this.room.state.roundTime < 10) {
-            this.timerText.text = "0" + this.room.state.roundTime;
-        } else {
-            this.timerText.text = "" + this.room.state.roundTime;
-        }
+        this.timerText.text = "" + this.room.state.roundTime + ' seconds left';
 
         //         // Check if enough time has passed since last update
         //         const timeSinceLastUpdate = time - this.lastPositionUpdateTime;
@@ -554,7 +566,8 @@ export default class GameScene extends Phaser.Scene {
                 name: player.name,
                 points: player.points,
                 color: player.color,
-                textColor: player.textColor
+                textColor: player.textColor,
+                roundPoints: player.roundPoints,
             }))
             .sort((a, b) => b.points - a.points);
 
@@ -562,7 +575,8 @@ export default class GameScene extends Phaser.Scene {
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
         const boardWidth = 500;
-        const boardHeight = 60 + players.length * 50;
+        // Add extra space for collective score text (110 vs 70 for first player row start)
+        const boardHeight = this.room.state.isCollectiveScoring ? 110 + players.length * 50 : 60 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
         // Add ready button if it doesn't already exist
@@ -622,9 +636,23 @@ export default class GameScene extends Phaser.Scene {
         title.setOrigin(0.5);
         this.scoreboardContainer.add(title);
 
+        if (this.room.state.isCollectiveScoring) {
+            const collectiveText = this.add.text(centerX, startY + 70,
+                `Team Score: ${this.room.state.collectiveScore}`, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    fontStyle: 'bold',
+                }
+            );
+            collectiveText.setOrigin(0.5);
+            this.scoreboardContainer.add(collectiveText);
+        }
+
         // Create player rows
+        // Adjust starting position based on scoring mode
+        const firstRowY = this.room.state.isCollectiveScoring ? startY + 110 : startY + 70;
         players.forEach((player, index) => {
-            const rowY = startY + 70 + index * 50;
+            const rowY = firstRowY + index * 50;
 
             // Player rank
             const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
@@ -655,8 +683,12 @@ export default class GameScene extends Phaser.Scene {
             nameText.setOrigin(0, 0.5);
             this.scoreboardContainer.add(nameText);
 
+            const pointsDisplay = this.room.state.isCollectiveScoring
+                ? (player.roundPoints === 0 ? '-' : `+${player.roundPoints}`)
+                : `${player.points} pts`;
+
             // Player points
-            const pointsText = this.add.text(centerX + 210, rowY, `${player.points} pts`, {
+            const pointsText = this.add.text(centerX + 210, rowY, pointsDisplay, {
                 fontSize: '24px',
                 color: '#000000',
                 fontStyle: 'bold'

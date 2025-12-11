@@ -64,7 +64,7 @@ export default class EndScene extends Phaser.Scene {
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
         const boardWidth = 500;
-        const boardHeight = 60 //+ players.length * 50;
+        const boardHeight = this.room.state.isCollectiveScoring ? 100 : 60 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
         // Create background
@@ -87,6 +87,18 @@ export default class EndScene extends Phaser.Scene {
         title.setOrigin(0.5);
         this.scoreboardContainer.add(title);
 
+        if (this.room.state.isCollectiveScoring) {
+            const collectiveText = this.add.text(centerX, startY + 70,
+                `Team Score: ${this.room.state.collectiveScore}`, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    fontStyle: 'bold',
+                }
+            );
+            collectiveText.setOrigin(0.5);
+            this.scoreboardContainer.add(collectiveText);
+        }
+
         // Create player rows
         var rowY = 0;
         var maxDist = {
@@ -99,44 +111,6 @@ export default class EndScene extends Phaser.Scene {
         }
         players.forEach((player, index) => {
             rowY = startY + 70 + index * 50;
-
-            // Player rank
-            const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
-                fontSize: '24px',
-                color: '#ffffff'
-            });
-            rank.setOrigin(0, 0.5);
-            this.scoreboardContainer.add(rank);
-
-            // Player color indicator (small circle)
-            const colorCircle = this.add.arc(
-                centerX - 130,
-                rowY,
-                12,
-                0,
-                360,
-                false,
-                parseInt(player.color.replace('#', ''), 16),
-                1
-            );
-            this.scoreboardContainer.add(colorCircle);
-
-            // Player name
-            const nameText = this.add.text(centerX - 100, rowY, player.name, {
-                fontSize: '24px',
-                color: '#ffffff'
-            });
-            nameText.setOrigin(0, 0.5);
-            this.scoreboardContainer.add(nameText);
-
-            // Player points
-            const pointsText = this.add.text(centerX + 210, rowY, `${player.points} pts`, {
-                fontSize: '24px',
-                color: '#ffffff',
-                fontStyle: 'bold'
-            });
-            pointsText.setOrigin(1, 0.5);
-            this.scoreboardContainer.add(pointsText);
 
             // Update max data
             if (player.distance > maxDist.dist) {
@@ -152,21 +126,97 @@ export default class EndScene extends Phaser.Scene {
                 }
             }
             console.log(maxDist, mostEmotes);
+
+            // If individual scores, add rows
+            if (!this.room.state.isCollectiveScoring) {
+                // Player rank
+                const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
+                    fontSize: '24px',
+                    color: '#000000'
+                });
+                rank.setOrigin(0, 0.5);
+                this.scoreboardContainer.add(rank);
+
+                // Player color indicator (small circle)
+                const colorCircle = this.add.arc(
+                    centerX - 130,
+                    rowY,
+                    12,
+                    0,
+                    360,
+                    false,
+                    parseInt(player.color.replace('#', ''), 16),
+                    1
+                );
+                this.scoreboardContainer.add(colorCircle);
+
+                // Player name
+                const nameText = this.add.text(centerX - 100, rowY, player.name, {
+                    fontSize: '24px',
+                    color: '#000000'
+                });
+                nameText.setOrigin(0, 0.5);
+                this.scoreboardContainer.add(nameText);
+
+                // Player points
+                const pointsText = this.add.text(centerX + 210, rowY, `${player.points} pts`, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    fontStyle: 'bold'
+                });
+                pointsText.setOrigin(1, 0.5);
+                this.scoreboardContainer.add(pointsText);
+            }
         });
 
-        // Create fun fact
-        const factText = this.add.text(centerX + 210, rowY + 50, "", {
-            fontSize: '24px',
-            color: '#ffffff',
-            fontStyle: 'bold'
-        });
-        factText.setOrigin(1, 0.5);
-        this.scoreboardContainer.add(factText);
+        // Create "Return to Lobby" button below the scoreboard
+        // const buttonY = centerY + boardHeight / 2 + 40;
+        // const lobbyButton = this.add.text(centerX, buttonY, 'Return to Lobby', {
+        //     fontSize: '24px',
+        //     color: '#ffffff',
+        //     backgroundColor: '#0717ff',
+        //     padding: { x: 20, y: 10 }
+        // })
+        //     .setOrigin(0.5)
+        //     .setInteractive({ useHandCursor: true })
+        //     .on('pointerdown', () => {
+        //         // Disconnect from the room before returning to lobby
+        //         if (this.room) {
+        //             this.room.leave();
+        //         }
+        //         this.runScene('lobby');
+        //     })
+        //     .on('pointerover', () => {
+        //         lobbyButton.setStyle({ backgroundColor: '#0929ff' });
+        //     })
+        //     .on('pointerout', () => {
+        //         lobbyButton.setStyle({ backgroundColor: '#0717ff' });
+        //     })
+        //     .setDepth(12);
 
+        // Create fun fact at bottom of screen (outside scoreboard container)
+        let factTextContent = "";
         if (Math.random() < 0.5 && maxDist.dist > 0) {
-            factText.text = `${maxDist.name} moved the most this game, ${maxDist.dist} pixels`
+            factTextContent = `${maxDist.name} moved the most this game, ${maxDist.dist} pixels`;
         } else if (mostEmotes.count > 0) {
-            factText.text = `${mostEmotes.name} emoted the most this game, ${mostEmotes.count} times`
+            factTextContent = `${mostEmotes.name} emoted the most this game, ${mostEmotes.count} times`;
+        }
+
+        // Add "refresh page to start new game" text
+        const refreshText = this.add.text(centerX, config.game.height - 60, 'Refresh page to start new game', {
+            fontSize: '18px',
+            color: '#ffffff',
+            fontStyle: 'normal'
+        });
+        refreshText.setOrigin(0.5, 0.5);
+
+        if (factTextContent) {
+            const factText = this.add.text(centerX, config.game.height - 30, factTextContent, {
+                fontSize: '18px',
+                color: '#ffffff',
+                fontStyle: 'normal'
+            });
+            factText.setOrigin(0.5, 0.5);
         }
 
         // Set depth to ensure scoreboard is on top

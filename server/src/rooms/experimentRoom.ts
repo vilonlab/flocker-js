@@ -7,6 +7,8 @@ import {generateDistinctColor, getContrastingTextColor} from '../utils';
 import { faker } from '@faker-js/faker';
 import { kMaxLength } from 'node:buffer';
 import { ad } from '@faker-js/faker/dist/airline-DF6RqYmq';
+import { scoringStrategies } from '../scoring/scoringStrategies';
+import { ScoringStrategy } from '../scoring/types';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -20,6 +22,7 @@ export class ExperimentRoom extends Room<RoomState> {
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private playerLock = true; // Prevent players from moving or using emotes
 	private lastRound = config.game.rounds;
+	private currentScoringStrategy: ScoringStrategy = scoringStrategies.COLLECTIVE_ZONE_COUNT;
 
 	// Called when first player connects
 	onCreate(options: any) {
@@ -28,6 +31,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.registerMessageListeners(); // Register onMessage listeners 
 		this.initializeZones(); // Create zones
 		this.state.phase = Phase.LOBBY; // Set initial phase
+
+		this.state.isCollectiveScoring = true; // Set flag if currentScoringStrategy is collective (hardcoded)
 	
         this.clock.start(); // Start room clock, used for async events
 	}
@@ -159,6 +164,7 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.emote = '';
 			player.zone = -1;
             player.ready = false;
+			player.roundPoints = 0;
 		})
 
 		console.log('Room reset complete. Waiting for host to start next round.');
@@ -186,11 +192,22 @@ export class ExperimentRoom extends Room<RoomState> {
     }
 
     private scorePlayers() {
-        this.state.players.forEach((player) => {
-            if (player.zone === this.state.targetZone) {
-                player.points += config.round.roundPoints
+        // Use the current scoring strategy to calculate scores
+        const result = this.currentScoringStrategy(this.state.players, this.state);
+
+        // Apply individual scores to players
+        result.individualScores.forEach((points, sessionId) => {
+            const player = this.state.players.get(sessionId);
+            if (player) {
+                player.points += points;
+				player.roundPoints = points;
             }
         });
+
+        // Update collective score if the strategy provides one
+        if (result.collectiveScore !== undefined) {
+            this.state.collectiveScore += result.collectiveScore;
+        }
     }
 
     // Run this function when the round timer ends
@@ -291,6 +308,13 @@ export class ExperimentRoom extends Room<RoomState> {
     }
 
     private checkPlayerCount() {
+        // Dispose room if all players have left
+        if (this.clients.length === 0) {
+            console.log('All players left, disposing room...');
+            this.disconnect();
+            return;
+        }
+
         if (this.clients.length < config.game.minClients && (this.state.phase === Phase.WAITING || this.state.phase === Phase.LOBBY)) {
             this.playerLock = true;
         }
@@ -334,7 +358,7 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.x += adj_x;
 			player.y += adj_y;
 
-			console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
+			// console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
 
 			// Add new distance to total player distance
 			player.distance += Math.abs(data.x) + Math.abs(data.y);
