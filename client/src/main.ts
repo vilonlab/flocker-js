@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import GameScene from './scenes/GameScene';
 import LobbyScene from './scenes/LobbyScene'
-import MMScene from './scenes/MMScene'
+import MMScene from './scenes/MMScene';
+import EndScene from './scenes/EndScene';
 import { config as gameConfig } from './config';
 
 import { BACKEND_HTTP_URL } from "./backend";
@@ -18,7 +19,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: gameConfig.physics.debug
     }
   },
-  scene: [LobbyScene, GameScene, MMScene]
+  scene: [LobbyScene, GameScene, MMScene, EndScene]
 };
 
 /**

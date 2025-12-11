@@ -6,6 +6,7 @@ enum Phase {
     WAITING,
     SCOREBOARD,
 	LOBBY,
+	END
 }
 
 class Player extends Schema {
@@ -21,6 +22,9 @@ class Player extends Schema {
     @type('boolean') host = false;
     @type('boolean') informed = false;
     @type('boolean') ready = false;
+	@type('number') distance = 0;
+	@type('number') emoteCount = 0;
+	@type('number') roundPoints = 0;
 }
 
 class Zone extends Schema {
@@ -39,6 +43,10 @@ class RoomState extends Schema {
     @type('number') targetZone = -1;
     @type(Phase) phase = Phase.ACTIVE;
     @type('number') minClients = config.game.minClients;
+	@type('number') roundNumber = 0;
+	@type('number') totalRounds = config.game.rounds;
+	@type('number') collectiveScore = 0;
+	@type('boolean') isCollectiveScoring = false;
 }
 
 

@@ -4,12 +4,11 @@
  */
 
 export const config = {
+
   // Game world settings
   world: {
-    centerX: 400,
-    centerY: 300,
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
   },
 
   // Round settings
@@ -19,20 +18,21 @@ export const config = {
     roundPoints: 1, // points earned if in target zone
     informedRatio: 0.5, // percentage of players informed each round
     scoreboardDuration: 5000, // ms - how long to show scoreboard
+    readyTimeout: 10000, // time to wait for all players to ready at start of round, in ms
   },
 
   // Zone settings
   zones: {
-    radius: 80,
-    offsetFromCenter: 200, // distance from center
+    radius: 120,
+    offsetFromCenter: 250, // distance from center
     minHueDifference: 90, // for distinct zone colors
   },
 
   // Player settings
   player: {
     radius: 20,
-    startX: 400,
-    startY: 300,
+    startX: 600,
+    startY: 400,
     minHueDifference: 60, // for distinct player colors
     minHueDifferenceFallback: 30, // when running out of colors
     emoteTimeout: 2000, // timeout for emote in ms
@@ -51,13 +51,18 @@ export const config = {
   },
 
   game : {
-    maxClients: 12,
-    minClients: 3,
+    maxClients: 2,
+    minClients: 2,
+    rounds: 2,
   },
 
-  // Logging settings
+  // Logging settings, in ms
   logging: {
-    snapshotInterval: 2000, // ms - how often to log snapshots
+    // snapshotInterval: 1000, // capture room state every second
+    // snapshotInterval: 500, // capture room state 2x per second
+    // snapshotInterval: 250, // 4x per second
+    snapshotInterval: 100, // 10x per second
+
   },
 } as const;
 

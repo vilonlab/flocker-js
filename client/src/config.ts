@@ -4,10 +4,11 @@
  */
 
 export const config = {
-  // Game window settings
+
+  // Game window settings -- must match Colyseus variables
   game: {
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
     backgroundColor: '#ffffff',
   },
 
@@ -36,6 +37,7 @@ export const config = {
   // UI settings
   ui: {
     debug: {
+      show: false,
       color: '#ff0000',
       fontSize: '16px',
       position: { x: 0, y: 0 },
@@ -70,7 +72,7 @@ export const config = {
     ONE: '?',
     TWO: '!',
     THREE: '+',
-    FOUR: '-',
+    FOUR: 'x',
   },
 } as const;
 

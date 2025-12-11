@@ -151,11 +151,21 @@ export default class MMScene extends Phaser.Scene {
     }
 
     update(): void {
-        if (!this.room) return;
+        if (!this.room || !this.room.state || !this.room.state.phase) return;
+        // console.log('Current state: ', this.room.state);
+        // console.log('Room phase: ', this.room.state.phase);
 
         if (this.room.state.phase === Phase.WAITING) {
-            // Pass the room object to GameScene
+            console.log('Current phase: ', this.room.state.phase, '; running experiment scene');
             this.runScene('experiment', { room: this.room });
+        }
+        if (this.room.state.phase === Phase.END) {
+            // Pass the room object to EndScene
+            console.log('Current phase: ', this.room.state.phase, '; running end scene');
+            this.runScene('end', { room: this.room });
+        }
+        else {
+            return;
         }
     }
 

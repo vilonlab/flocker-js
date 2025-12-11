@@ -49,28 +49,6 @@ export default class LobbyScene extends Phaser.Scene {
         titleText.setOrigin(0.5, 0.5) // Center the text on its position
             .setDepth(10); // Above all other background sprites 
 
-        // Add button to access admin panel
-        const adminButton = this.add.text(
-            20,
-            config.game.height - 20,
-            'Administrator access',
-            {
-                fontFamily: 'Arial, Helvetica, sans-serif',
-                fontSize: '32px',
-                fontStyle: 'bold',
-                color: '#0011ffff',
-                padding: { x: 0, y: 0 }
-            }
-        );
-
-        adminButton.setOrigin(0, 0)
-            .setInteractive({ useHandCursor: true })
-            .setDepth(10); 
-        
-        adminButton.on('pointerdown', () => {
-            window.location.href = '/app/admin';
-        });
-
         // Add join game button
         const joinButton = this.add.text(
             config.game.width / 2,

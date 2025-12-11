@@ -6,6 +6,9 @@ import { randomInt } from 'node:crypto';
 import {generateDistinctColor, getContrastingTextColor} from '../utils';
 import { faker } from '@faker-js/faker';
 import { kMaxLength } from 'node:buffer';
+import { ad } from '@faker-js/faker/dist/airline-DF6RqYmq';
+import { scoringStrategies } from '../scoring/scoringStrategies';
+import { ScoringStrategy } from '../scoring/types';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -18,6 +21,8 @@ export class ExperimentRoom extends Room<RoomState> {
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private playerLock = true; // Prevent players from moving or using emotes
+	private lastRound = config.game.rounds;
+	private currentScoringStrategy: ScoringStrategy = scoringStrategies.COLLECTIVE_ZONE_COUNT;
 
 	// Called when first player connects
 	onCreate(options: any) {
@@ -26,6 +31,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.registerMessageListeners(); // Register onMessage listeners 
 		this.initializeZones(); // Create zones
 		this.state.phase = Phase.LOBBY; // Set initial phase
+
+		this.state.isCollectiveScoring = true; // Set flag if currentScoringStrategy is collective (hardcoded)
 	
         this.clock.start(); // Start room clock, used for async events
 	}
@@ -157,9 +164,12 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.emote = '';
 			player.zone = -1;
             player.ready = false;
+			player.roundPoints = 0;
 		})
 
 		console.log('Room reset complete. Waiting for host to start next round.');
+		// this.state.phase = Phase.END;
+		console.log(`Current phase: ${this.state.phase}`);
 	}
 
     private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
@@ -182,11 +192,22 @@ export class ExperimentRoom extends Room<RoomState> {
     }
 
     private scorePlayers() {
-        this.state.players.forEach((player) => {
-            if (player.zone === this.state.targetZone) {
-                player.points += config.round.roundPoints
+        // Use the current scoring strategy to calculate scores
+        const result = this.currentScoringStrategy(this.state.players, this.state);
+
+        // Apply individual scores to players
+        result.individualScores.forEach((points, sessionId) => {
+            const player = this.state.players.get(sessionId);
+            if (player) {
+                player.points += points;
+				player.roundPoints = points;
             }
         });
+
+        // Update collective score if the strategy provides one
+        if (result.collectiveScore !== undefined) {
+            this.state.collectiveScore += result.collectiveScore;
+        }
     }
 
     // Run this function when the round timer ends
@@ -213,9 +234,25 @@ export class ExperimentRoom extends Room<RoomState> {
 
     // Run this function at the end of end round, separate logic for starting new game
     private startRound() {
+		if (this.state.roundNumber >= this.lastRound - 1) {
+			console.log('Final round');
+			this.state.phase = Phase.END;
+			// this.endGame();
+			return;
+		}
+
+		// Increment round count
+		this.state.roundNumber += 1;
+		console.log('Current round: ', this.state.roundNumber);
 
         // Select informed players
         this.selectInformed();
+
+
+
+
+		this.state.phase = Phase.WAITING;
+		console.log(`Current phase: ${this.state.phase}`);
 
         // Wait for all players to be ready
         this.waitForPlayerReady();
@@ -235,22 +272,49 @@ export class ExperimentRoom extends Room<RoomState> {
         return allReady;
     }
 
-    private waitForPlayerReady() {
-        const readyCheckInterval = this.clock.setInterval(async () => {
-            const allReady = await this.checkReady();
-            const hasPlayers = this.state.players.size > 0;
-            if (allReady && hasPlayers) {
-                readyCheckInterval.clear();
-                this.state.players.forEach((player) => {
-                    player.ready = false;
-					this.playerLock = false;
-                });
-                this.state.phase = Phase.ACTIVE;
-            }
-        }, 500);
+    private async waitForPlayerReady() {
+        // Create promise that resolves when all players are ready
+        const readyCheckPromise = new Promise<void>((resolve) => {
+            const readyCheckInterval = this.clock.setInterval(async () => {
+                const allReady = await this.checkReady();
+                const hasPlayers = this.state.players.size > 0;
+                if (allReady && hasPlayers) {
+                    readyCheckInterval.clear();
+                    resolve();
+                }
+            }, 500);
+        });
+
+        // Create promise that resolves after 10 seconds
+        const timeoutPromise = new Promise<void>((resolve) => {
+            this.clock.setTimeout(() => {
+                console.log('Ready timeout expired (10s), starting round anyway');
+                resolve();
+            }, config.round.readyTimeout);
+        });
+
+		console.log('Awaiting ready promises');
+
+        // Wait for whichever happens first: all ready or timeout
+        await Promise.race([readyCheckPromise, timeoutPromise]);
+		console.log('Promise resolved');
+
+        // Reset ready state and unlock players
+        this.state.players.forEach((player) => {
+            player.ready = false;
+        });
+        this.playerLock = false;
+        this.state.phase = Phase.ACTIVE;
     }
 
     private checkPlayerCount() {
+        // Dispose room if all players have left
+        if (this.clients.length === 0) {
+            console.log('All players left, disposing room...');
+            this.disconnect();
+            return;
+        }
+
         if (this.clients.length < config.game.minClients && (this.state.phase === Phase.WAITING || this.state.phase === Phase.LOBBY)) {
             this.playerLock = true;
         }
@@ -271,6 +335,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		// Called every time this room receives a "move" message
 		this.onMessage('move', (client, data) => {
 			const player = this.state.players.get(client.sessionId);
+			var adj_x = 0;
+			var adj_y = 0;
 
 			if (!player) {
 				console.error(`Player not found for session ${client.sessionId}`);
@@ -282,9 +348,20 @@ export class ExperimentRoom extends Room<RoomState> {
 				return;
 			}
 
-			player.x += data.x;
-			player.y += data.y;
-			console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
+			if (data.x && data.y) {
+				adj_x = Math.round((data.x * Math.sqrt(2) / 2)*100) / 100;
+				adj_y = Math.round((data.y * Math.sqrt(2) / 2)*100) / 100;
+			} else {
+				adj_x = data.x;
+				adj_y = data.y;
+			}
+			player.x += adj_x;
+			player.y += adj_y;
+
+			// console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
+
+			// Add new distance to total player distance
+			player.distance += Math.abs(data.x) + Math.abs(data.y);
 
 			// Clamp player position to world bounds (accounting for player radius)
 			const minX = player.radius;
@@ -298,24 +375,24 @@ export class ExperimentRoom extends Room<RoomState> {
             player.zone = this.checkZone(player.x, player.y, player.radius);
 		});
 
-		// Called when client sends position update (for collision-based movements)
-		this.onMessage('position', (client, data) => {
-			const player = this.state.players.get(client.sessionId);
+		// // Called when client sends position update (for collision-based movements)
+		// this.onMessage('position', (client, data) => {
+		// 	const player = this.state.players.get(client.sessionId);
 
-			if (!player) {
-				console.error(`Player not found for session ${client.sessionId}`);
-				return;
-			}
+		// 	if (!player) {
+		// 		console.error(`Player not found for session ${client.sessionId}`);
+		// 		return;
+		// 	}
 
-			// Only allow movement when round is active
-			// if (!this.state.roundActive) {
-			// 	return;
-			// }
+		// 	// Only allow movement when round is active
+		// 	// if (!this.state.roundActive) {
+		// 	// 	return;
+		// 	// }
 
-			player.x = data.x;
-			player.y = data.y;
-            player.zone = this.checkZone(player.x, player.y);
-		});
+		// 	player.x = data.x;
+		// 	player.y = data.y;
+        //     player.zone = this.checkZone(player.x, player.y);
+		// });
 
 		// Called when client sends emote update
 		this.onMessage('emote', (client, data) => {
@@ -329,6 +406,11 @@ export class ExperimentRoom extends Room<RoomState> {
             // Only allow emotes when phase is ACTIVE
 			if (this.state.phase !== Phase.ACTIVE || this.playerLock) {
 				return;
+			}
+
+			// Increment the emote count when the emote changes
+			if (player.emote != data.emote) {
+				player.emoteCount += 1;
 			}
 
 			player.emote = data.emote;
@@ -369,8 +451,10 @@ export class ExperimentRoom extends Room<RoomState> {
 	// Create four zones around the center of the screen
 	private initializeZones() {
 		
-		const centerX = config.world.centerX;
-		const centerY = config.world.centerY;
+		// const centerX = config.world.centerX;
+		// const centerY = config.world.centerY;
+		const centerX = config.world.width / 2;
+		const centerY = config.world.height / 2;
 		const zoneRadius = config.zones.radius;
 		const offset = config.zones.offsetFromCenter;
 
@@ -426,4 +510,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.waitForPlayerReady(); // Wait for all players to ready before starting round
 		this.selectInformed();
 	}
+}
+
+async function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
