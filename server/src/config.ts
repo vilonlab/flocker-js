@@ -16,7 +16,6 @@ export const config = {
     duration: 30, // seconds
     timerInterval: 1000, // ms - how often to update timer
     roundPoints: 1, // points earned if in target zone
-    awareRatio: 0.5, // percentage of players aware each round
     scoreboardDuration: 5000, // ms - how long to show scoreboard
     readyTimeout: 10000, // time to wait for all players to ready at start of round, in ms
   },
@@ -54,6 +53,9 @@ export const config = {
     maxClients: 5,
     minClients: 5,
     rounds: 5,
+    randomAware: false, // randomly assign new aware players each round
+    awareMin: 0.1, // starting proportion of aware players
+    awareMax: 1.0 // ending proportion of aware players 
   },
 
   // Logging settings, in ms

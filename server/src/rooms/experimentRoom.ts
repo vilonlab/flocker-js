@@ -173,23 +173,38 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log(`Current phase: ${this.state.phase}`);
 	}
 
-    private selectAware(maxAware: number = this.state.players.size * config.game.awareMax) {
-        maxAware = Math.ceil(maxAware);
-        const playerArray = Array.from(this.state.players.values());
-        const indices = Array.from({length: playerArray.length}, (_, i) => i);
+    private selectAware() {
+
+		// Increase aware proportion linearly each round
+		const currentAwareProportion = (
+			((config.game.awareMax - config.game.awareMin) / (config.game.rounds - 1)) 
+			* (this.state.roundNumber)) 
+			+ config.game.awareMin;
+
+		const playerArray = Array.from(this.state.players.values());
+		const targetCount = Math.ceil(playerArray.length * currentAwareProportion);
 
         // Shuffle array using Fisher-Yates
-        for (let i = indices.length - 1; i > 0; i--) {
+        for (let i = playerArray.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [indices[i], indices[j]] = [indices[j], indices[i]];
+            [playerArray[i], playerArray[j]] = [playerArray[j], playerArray[i]];
         }
+		
+		// If existing aware players should remain aware, sort array so they are at the front of the array
+		if (!config.game.randomAware) {
+			playerArray.sort(
+				(a, b) => {
+					if (a.aware && !b.aware) return -1;
+					if (!a.aware && b.aware) return 1;
+					return 0;
+				}
+			);
+		}
 
-        // Take first maxAware indices
-        const awareIndices = new Set(indices.slice(0, maxAware));
-
-        playerArray.forEach((player, index) => {
-            player.aware = awareIndices.has(index);
-        });
+		// Make first n players aware (includes all previously aware players if not using randomly selected players each round)
+		playerArray.forEach((player, index) => {
+			player.aware = index < targetCount;
+		});
     }
 
     private scorePlayers() {
