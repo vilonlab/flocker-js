@@ -74,6 +74,7 @@ export class ExperimentRoom extends Room<RoomState> {
 
 		if (this.state.phase === Phase.LOBBY &&
 			this.clients.length >= config.game.minClients) {
+			this.lock();
 			this.transitionFromLobby();
 		}
 	}

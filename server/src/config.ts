@@ -13,7 +13,7 @@ export const config = {
 
   // Round settings
   round: {
-    duration: 15, // seconds
+    duration: 30, // seconds
     timerInterval: 1000, // ms - how often to update timer
     roundPoints: 1, // points earned if in target zone
     informedRatio: 0.5, // percentage of players informed each round
@@ -24,7 +24,7 @@ export const config = {
   // Zone settings
   zones: {
     radius: 120,
-    offsetFromCenter: 250, // distance from center
+    offsetFromCenter: 225, // distance from center
     minHueDifference: 90, // for distinct zone colors
   },
 
@@ -51,9 +51,9 @@ export const config = {
   },
 
   game : {
-    maxClients: 2,
-    minClients: 2,
-    rounds: 2,
+    maxClients: 5,
+    minClients: 5,
+    rounds: 5,
   },
 
   // Logging settings, in ms
