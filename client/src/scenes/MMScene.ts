@@ -101,6 +101,17 @@ export default class MMScene extends Phaser.Scene {
                 color: player.color,
                 textColor: player.textColor
             }))
+        
+        // Sort array so current player is on top
+        players.sort((a, b) => {
+            if (a.sessionId === this.room.sessionId) {
+                return -1;
+            } else if (b.sessionId === this.room.sessionId) {
+                return 1;
+            } else {
+                return 0;
+            }
+        });
 
         // List dimensions and positioning
         const centerX = config.game.width / 2;
@@ -117,15 +128,30 @@ export default class MMScene extends Phaser.Scene {
             backgroundCenterY,
             boardWidth,
             boardHeight,
-            0xffffff,
+            0x999999,
             0.95
         );
-        background.setStrokeStyle(4, 0x000000);
+        // background.setStrokeStyle(4, 0x000000);
         this.playerList.add(background);
 
         // Create player rows
         players.forEach((player, index) => {
+
             const rowY = fixedTopY + (index * 50) + 25;
+
+            // Add background to current player
+            if (this.room.sessionId === player.sessionId) {
+                const playerBackground = this.add.rectangle(
+                    centerX,
+                    rowY,
+                    boardWidth,
+                    50,
+                    0xffffff,
+                    0.95
+                );
+                playerBackground.setDepth(5);
+                this.playerList.add(playerBackground);
+            }
 
             // Player color indicator (small circle)
             const colorCircle = this.add.arc(
@@ -138,6 +164,7 @@ export default class MMScene extends Phaser.Scene {
                 parseInt(player.color.replace('#', ''), 16),
                 1
             );
+            colorCircle.setDepth(10);
             this.playerList.add(colorCircle);
 
             // Player name
@@ -146,6 +173,7 @@ export default class MMScene extends Phaser.Scene {
                 color: '#000000'
             });
             nameText.setOrigin(0, 0.5);
+            nameText.setDepth(10);
             this.playerList.add(nameText);
         });
     }
@@ -168,6 +196,14 @@ export default class MMScene extends Phaser.Scene {
             return;
         }
     }
+
+    private getCurrentPlayer() {
+        if (this.room.state.players) {
+             return this.room.state.players.get(this.room.sessionId);
+        }
+        return null;
+    }
+
 
     runScene(key: string, data?: any) {
         this.scene.start(key, data);

@@ -101,7 +101,7 @@ export default class GameScene extends Phaser.Scene {
             // Create an arc (circle) for this zone
             const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
             entity.setDepth(-1);
-            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.informed) {
+            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.aware) {
                 entity.setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
             }
             this.zoneEntities[zone.id] = entity;
@@ -112,7 +112,7 @@ export default class GameScene extends Phaser.Scene {
 
             // Clear stroke from all zones
             Object.keys(this.zoneEntities).forEach((zoneId) => {
-                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
+                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
                     this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
                 }
                 else {
@@ -181,7 +181,7 @@ export default class GameScene extends Phaser.Scene {
 
                 if (player === this.getCurrentPlayer()) {
                     Object.keys(this.zoneEntities).forEach((zoneId) => {
-                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
+                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
                             this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
                         }
                         else {
@@ -234,7 +234,8 @@ export default class GameScene extends Phaser.Scene {
         }).setStroke('#ffffff', 3);
 
         this.timerText = this.add.text(0, 75, '00', {
-            color: '#000000',
+            color: '#ff0000ff',
+            fontStyle: 'bold',
             fontSize: '24px'
         }).setStroke('#ffffff', 3);
 
@@ -481,7 +482,7 @@ export default class GameScene extends Phaser.Scene {
                 target_zone: this.room.state.targetZone,
                 player_points: currentPlayer.points,
                 phase: this.room.state.phase,
-                informed: currentPlayer.informed,
+                aware: currentPlayer.aware,
                 ready: currentPlayer.ready,
                 distance: currentPlayer.distance,
                 emoteCount: currentPlayer.emoteCount,
@@ -514,7 +515,7 @@ export default class GameScene extends Phaser.Scene {
         room_id?: string;
         target_zone?: number;
         player_points?: number;
-        informed?: boolean;
+        aware?: boolean;
         phase?: number;
         ready?: boolean;
         distance?: number;
@@ -531,7 +532,7 @@ export default class GameScene extends Phaser.Scene {
             'Zone': params.zone_id?.toString(),
             'Target Zone': params.target_zone?.toString(),
             'Player Points': params.player_points?.toString(),
-            'Informed': params.informed?.toString(),
+            'Aware': params.aware?.toString(),
             'Phase': phase_string?.toString(),
             'Player Ready': params.ready?.toString(),
             'Distance traveled': params.distance?.toString(),
@@ -576,7 +577,8 @@ export default class GameScene extends Phaser.Scene {
         const centerY = config.game.height / 2;
         const boardWidth = 500;
         // Add extra space for collective score text (110 vs 70 for first player row start)
-        const boardHeight = this.room.state.isCollectiveScoring ? 110 + players.length * 50 : 60 + players.length * 50;
+        // const boardHeight = this.room.state.isCollectiveScoring ? 110 + players.length * 50 : 60 + players.length * 50;
+        const boardHeight = this.room.state.isCollectiveScoring ? 110 : 60 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
         // Add ready button if it doesn't already exist
@@ -628,7 +630,7 @@ export default class GameScene extends Phaser.Scene {
         this.scoreboardContainer.add(background);
 
         // Create title
-        const title = this.add.text(centerX, startY + 30, 'flocker', {
+        const title = this.add.text(centerX, startY + 30, `Round ${this.room.state.roundNumber + 1}`, {
             fontSize: '32px',
             color: '#000000',
             fontStyle: 'bold'
@@ -636,22 +638,17 @@ export default class GameScene extends Phaser.Scene {
         title.setOrigin(0.5);
         this.scoreboardContainer.add(title);
 
-        if (this.room.state.isCollectiveScoring) {
-            const collectiveText = this.add.text(centerX, startY + 70,
-                `Team Score: ${this.room.state.collectiveScore}`, {
-                    fontSize: '24px',
-                    color: '#000000',
-                    fontStyle: 'bold',
-                }
-            );
-            collectiveText.setOrigin(0.5);
-            this.scoreboardContainer.add(collectiveText);
-        }
-
         // Create player rows
         // Adjust starting position based on scoring mode
         const firstRowY = this.room.state.isCollectiveScoring ? startY + 110 : startY + 70;
+        var scoreDelta = 0;
         players.forEach((player, index) => {
+            scoreDelta += player.roundPoints;
+
+            return;
+
+
+
             const rowY = firstRowY + index * 50;
 
             // Player rank
@@ -673,7 +670,7 @@ export default class GameScene extends Phaser.Scene {
                 parseInt(player.color.replace('#', ''), 16),
                 1
             );
-            this.scoreboardContainer.add(colorCircle);
+            // this.scoreboardContainer.add(colorCircle);
 
             // Player name
             const nameText = this.add.text(centerX - 100, rowY, player.name, {
@@ -681,7 +678,7 @@ export default class GameScene extends Phaser.Scene {
                 color: '#000000'
             });
             nameText.setOrigin(0, 0.5);
-            this.scoreboardContainer.add(nameText);
+            // this.scoreboardContainer.add(nameText);
 
             const pointsDisplay = this.room.state.isCollectiveScoring
                 ? (player.roundPoints === 0 ? '-' : `+${player.roundPoints}`)
@@ -694,8 +691,20 @@ export default class GameScene extends Phaser.Scene {
                 fontStyle: 'bold'
             });
             pointsText.setOrigin(1, 0.5);
-            this.scoreboardContainer.add(pointsText);
+            // this.scoreboardContainer.add(pointsText);
         });
+
+        if (this.room.state.isCollectiveScoring) {
+            const collectiveText = this.add.text(centerX, startY + 70,
+                `Team Score:  + ${scoreDelta}`, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    fontStyle: 'bold',
+                }
+            );
+            collectiveText.setOrigin(0.5);
+            this.scoreboardContainer.add(collectiveText);
+        }
 
         // Set depth to ensure scoreboard is on top
         this.scoreboardContainer.setDepth(10);

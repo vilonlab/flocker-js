@@ -8,7 +8,7 @@ import { faker } from '@faker-js/faker';
 import { kMaxLength } from 'node:buffer';
 import { ad } from '@faker-js/faker/dist/airline-DF6RqYmq';
 import { scoringStrategies } from '../scoring/scoringStrategies';
-import { ScoringStrategy } from '../scoring/types';
+import { ScoringStrategyConfig } from '../scoring/types';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -22,7 +22,7 @@ export class ExperimentRoom extends Room<RoomState> {
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private playerLock = true; // Prevent players from moving or using emotes
 	private lastRound = config.game.rounds;
-	private currentScoringStrategy: ScoringStrategy = scoringStrategies.COLLECTIVE_ZONE_COUNT;
+	private currentScoringStrategy: ScoringStrategyConfig = scoringStrategies.COLLECTIVE_ZONE_COUNT;
 
 	// Called when first player connects
 	onCreate(options: any) {
@@ -32,7 +32,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.initializeZones(); // Create zones
 		this.state.phase = Phase.LOBBY; // Set initial phase
 
-		this.state.isCollectiveScoring = true; // Set flag if currentScoringStrategy is collective (hardcoded)
+		this.state.isCollectiveScoring = this.currentScoringStrategy.isCollective;
 	
         this.clock.start(); // Start room clock, used for async events
 	}
@@ -74,6 +74,7 @@ export class ExperimentRoom extends Room<RoomState> {
 
 		if (this.state.phase === Phase.LOBBY &&
 			this.clients.length >= config.game.minClients) {
+			this.lock();
 			this.transitionFromLobby();
 		}
 	}
@@ -172,28 +173,43 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log(`Current phase: ${this.state.phase}`);
 	}
 
-    private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
-        maxInformed = Math.ceil(maxInformed);
-        const playerArray = Array.from(this.state.players.values());
-        const indices = Array.from({length: playerArray.length}, (_, i) => i);
-        
+    private selectAware() {
+
+		// Increase aware proportion linearly each round
+		const currentAwareProportion = (
+			((config.game.awareMax - config.game.awareMin) / (config.game.rounds - 1)) 
+			* (this.state.roundNumber)) 
+			+ config.game.awareMin;
+
+		const playerArray = Array.from(this.state.players.values());
+		const targetCount = Math.ceil(playerArray.length * currentAwareProportion);
+
         // Shuffle array using Fisher-Yates
-        for (let i = indices.length - 1; i > 0; i--) {
+        for (let i = playerArray.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [indices[i], indices[j]] = [indices[j], indices[i]];
+            [playerArray[i], playerArray[j]] = [playerArray[j], playerArray[i]];
         }
-        
-        // Take first maxInformed indices
-        const informedIndices = new Set(indices.slice(0, maxInformed));
-        
-        playerArray.forEach((player, index) => {
-            player.informed = informedIndices.has(index);
-        });
+		
+		// If existing aware players should remain aware, sort array so they are at the front of the array
+		if (!config.game.randomAware) {
+			playerArray.sort(
+				(a, b) => {
+					if (a.aware && !b.aware) return -1;
+					if (!a.aware && b.aware) return 1;
+					return 0;
+				}
+			);
+		}
+
+		// Make first n players aware (includes all previously aware players if not using randomly selected players each round)
+		playerArray.forEach((player, index) => {
+			player.aware = index < targetCount;
+		});
     }
 
     private scorePlayers() {
         // Use the current scoring strategy to calculate scores
-        const result = this.currentScoringStrategy(this.state.players, this.state);
+        const result = this.currentScoringStrategy.calculate(this.state.players, this.state);
 
         // Apply individual scores to players
         result.individualScores.forEach((points, sessionId) => {
@@ -224,7 +240,7 @@ export class ExperimentRoom extends Room<RoomState> {
             // Set room phase to WAITING, preventing the room counter from starting
             this.state.phase = Phase.WAITING;
 
-            // Reset player variables, choose new target zone, update informed
+            // Reset player variables, choose new target zone, update aware
             this.resetRoom();
 
             // Start next round
@@ -245,8 +261,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.state.roundNumber += 1;
 		console.log('Current round: ', this.state.roundNumber);
 
-        // Select informed players
-        this.selectInformed();
+        // Select aware players
+        this.selectAware();
 
 
 
@@ -486,7 +502,7 @@ export class ExperimentRoom extends Room<RoomState> {
 						id: sessionId,
 						x: player.x,
 						y: player.y,
-						informed: player.informed,
+						aware: player.aware,
 						name: player.name,
 						color: player.color,
 						textColor: player.textColor,
@@ -508,7 +524,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.startRoundTimer(); // Start round timer
 		this.resetRoom();
 		this.waitForPlayerReady(); // Wait for all players to ready before starting round
-		this.selectInformed();
+		this.selectAware();
 	}
 }
 

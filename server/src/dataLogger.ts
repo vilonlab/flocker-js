@@ -11,6 +11,17 @@ import { transcode } from 'node:buffer';
 class DataLogger {
 	private static instance: DataLogger | undefined = undefined;
 	private static db: Database.Database;
+	private snapshotQueue: Array<{
+		timestamp: number;
+		serverTime: number;
+		roomId: string;
+		phase?: string;
+		targetZone?: string;
+		players: any[];
+	}> = [];
+	private flushInterval: NodeJS.Timeout | null = null;
+	private readonly BATCH_SIZE = 50; // Flush after 50 snapshots
+	private readonly FLUSH_INTERVAL_MS = 1000; // Or flush every 1 second
 
 	private constructor() {
 		const dataDir = process.env.DB_DIR || path.join(__dirname, '../data');
@@ -34,6 +45,9 @@ class DataLogger {
 
 		// Initialize database schema
 		this.initSchema();
+
+		// Start periodic flush timer
+		this.startFlushTimer();
 	}
 
 	/**
@@ -62,20 +76,6 @@ class DataLogger {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS player_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                snapshot_id INTEGER NOT NULL,
-                timestamp INTEGER NOT NULL,
-                room_id TEXT NOT NULL,
-                player_id TEXT NOT NULL,
-                x REAL,
-                y REAL,
-                informed BOOLEAN,
-                additional_data JSON,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
-            );
-
             CREATE TABLE IF NOT EXISTS player_data (
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT,
@@ -88,9 +88,6 @@ class DataLogger {
             CREATE INDEX IF NOT EXISTS idx_snapshots_room_time
                 ON snapshots(room_id, timestamp);
 
-            CREATE INDEX IF NOT EXISTS idx_player_snapshots_player_time
-                ON player_snapshots(player_id, timestamp);
-
             CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
                 ON player_snapshots(snapshot_id);
 
@@ -100,7 +97,7 @@ class DataLogger {
 	}
 
 	/**
-     * Log a game state snapshot
+     * Log a game state snapshot (queued for batch insert)
      */
 	logSnapshot(data: {
 		timestamp: number;
@@ -110,53 +107,62 @@ class DataLogger {
 		targetZone?: string;
 		players: any[];
 	}): void {
+		// Add to queue
+		this.snapshotQueue.push(data);
+
+		// Flush immediately if batch size reached
+		if (this.snapshotQueue.length >= this.BATCH_SIZE) {
+			this.flushSnapshots();
+		}
+	}
+
+	/**
+	 * Start periodic flush timer
+	 */
+	private startFlushTimer(): void {
+		this.flushInterval = setInterval(() => {
+			if (this.snapshotQueue.length > 0) {
+				this.flushSnapshots();
+			}
+		}, this.FLUSH_INTERVAL_MS);
+	}
+
+	/**
+	 * Flush all queued snapshots to database in a single transaction
+	 */
+	private flushSnapshots(): void {
+		if (this.snapshotQueue.length === 0) return;
+
+		// Get snapshots to flush and clear queue
+		const snapshots = [...this.snapshotQueue];
+		this.snapshotQueue = [];
+
 		try {
-			// Use a transaction to ensure both tables are updated atomically
+			// Insert all snapshots in a single transaction
 			const transaction = DataLogger.db.transaction(() => {
-				// Insert into snapshots table
 				const snapshotStmt = DataLogger.db.prepare(`
                     INSERT INTO snapshots (timestamp, server_time, room_id, phase, target_zone, players)
                     VALUES (?, ?, ?, ?, ?, ?)
                 `);
 
-				const result = snapshotStmt.run(
-					data.timestamp,
-					data.serverTime,
-					data.roomId,
-					data.phase ?? null,
-					data.targetZone ?? null,
-					JSON.stringify(data.players),
-				);
-
-				// const snapshotId = result.lastInsertRowid;
-
-				// // Insert each player into player_snapshots table
-				// const playerStmt = DataLogger.db.prepare(`
-                //     INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, player_id, x, y, informed, additional_data)
-                //     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                // `);
-
-				// for (const player of data.players) {
-				// 	// Extract common properties and store the rest in additional_data
-				// 	const {id, x, y, informed, ...additionalData} = player;
-
-				// 	playerStmt.run(
-				// 		snapshotId,
-				// 		data.timestamp,
-				// 		data.roomId,
-				// 		id ?? null,
-				// 		x ?? null,
-				// 		y ?? null,
-				// 		informed ?? null,
-				// 		Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
-				// 	);
-				// }
-                console.log('Snapshot:', result)
+				for (const data of snapshots) {
+					snapshotStmt.run(
+						data.timestamp,
+						data.serverTime,
+						data.roomId,
+						data.phase ?? null,
+						data.targetZone ?? null,
+						JSON.stringify(data.players),
+					);
+				}
 			});
 
 			transaction();
+			console.log(`Flushed ${snapshots.length} snapshots to database`);
 		} catch (error) {
-			console.error('Failed to log snapshot:', error);
+			console.error('Failed to flush snapshots:', error);
+			// Re-add failed snapshots to front of queue
+			this.snapshotQueue.unshift(...snapshots);
 		}
 	}
 
@@ -242,6 +248,18 @@ class DataLogger {
      * Close database connection (call on server shutdown)
      */
 	close(): void {
+		// Stop flush timer
+		if (this.flushInterval) {
+			clearInterval(this.flushInterval);
+			this.flushInterval = null;
+		}
+
+		// Flush any remaining snapshots
+		if (this.snapshotQueue.length > 0) {
+			console.log('Flushing remaining snapshots before closing...');
+			this.flushSnapshots();
+		}
+
 		if (DataLogger.db) {
 			DataLogger.db.close();
 			console.log('Database connection closed');

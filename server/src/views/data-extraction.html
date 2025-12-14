@@ -215,24 +215,6 @@
                 <input type="date" id="endDate" name="endDate" required>
             </div>
 
-            <div class="form-group">
-                <label>Data Type</label>
-                <div class="radio-group">
-                    <div class="radio-option">
-                        <input type="radio" id="state" name="dataType" value="STATE" checked>
-                        <label class="radio-label" for="state">State</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" id="player" name="dataType" value="PLAYER">
-                        <label class="radio-label" for="player">Player</label>
-                    </div>
-                    <div class="radio-option">
-                        <input type="radio" id="full" name="dataType" value="FULL">
-                        <label class="radio-label" for="full">Full</label>
-                    </div>
-                </div>
-            </div>
-
             <div class="button-group">
                 <button type="submit" class="btn-primary">Download CSV</button>
                 <button type="button" class="btn-secondary" onclick="clearForm()">Clear</button>
@@ -258,18 +240,11 @@
         document.getElementById('endDate').valueAsDate = today;
         document.getElementById('startDate').valueAsDate = sevenDaysAgo;
 
-        // helper to read selected radio value
-        function getSelectedDataType() {
-            const el = document.querySelector('input[name="dataType"]:checked');
-            return el ? el.value : '';
-        }
-
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
-            const dataType = getSelectedDataType();
 
             // Validate dates
             if (new Date(startDate) > new Date(endDate)) {
@@ -284,7 +259,7 @@
                 const timezoneOffset = new Date().getTimezoneOffset();
 
                 // Build URL with query parameters
-                const url = `/app/admin/api/data?dataType=${dataType}&startDate=${startDate}&endDate=${endDate}&timezoneOffset=${timezoneOffset}`;
+                const url = `/app/admin/api/data?startDate=${startDate}&endDate=${endDate}&timezoneOffset=${timezoneOffset}`;
 
                 // Fetch the CSV
                 const response = await fetch(url);

@@ -83,48 +83,12 @@ export default config({
 
 				const startDate = req.query.startDate as string | undefined;
 				const endDate = req.query.endDate as string | undefined;
-                const dataType = req.query.dataType as string | undefined;
 				const timezoneOffset = req.query.timezoneOffset ? parseInt(req.query.timezoneOffset as string) : 0;
-                let table = "" as string;
-
-                // Parse dataType and determine which table to query and columns to select
-                let selectClause = '';
-                if (dataType === "STATE") {
-                    table = "snapshots";
-                    selectClause = 'SELECT *';
-                } else if (dataType === "PLAYER") {
-                    table = "player_snapshots";
-                    selectClause = 'SELECT *';
-                } else {
-                    // JOIN: use aliases to avoid column name conflicts
-                    table = "player_snapshots INNER JOIN snapshots ON player_snapshots.snapshot_id = snapshots.id";
-                    selectClause = `SELECT
-                        player_snapshots.id as player_snapshot_id,
-                        player_snapshots.snapshot_id,
-                        player_snapshots.timestamp,
-                        player_snapshots.room_id,
-                        player_snapshots.round_number,
-                        player_snapshots.player_id,
-                        player_snapshots.x,
-                        player_snapshots.y,
-                        player_snapshots.informed,
-                        player_snapshots.additional_data,
-                        player_snapshots.created_at as player_created_at,
-                        snapshots.id as state_snapshot_id,
-                        snapshots.server_time,
-                        snapshots.phase,
-                        snapshots.target_zone,
-                        snapshots.players,
-                        snapshots.created_at as state_created_at`;
-                }
 
 				// Build query with date filtering
-				let query = selectClause + ' FROM ' + table;
+				let query = 'SELECT * FROM snapshots'
 				const params: any[] = [];
 				const conditions: string[] = [];
-
-				// Determine timestamp column name (needs to be qualified for JOINs)
-				const timestampColumn = (dataType === "STATE" || dataType === "PLAYER") ? 'timestamp' : 'player_snapshots.timestamp';
 
 				if (startDate) {
 					// Parse date as UTC midnight, then adjust for client's timezone
@@ -132,7 +96,7 @@ export default config({
 					// We want start of day (00:00:00) in client's local timezone
 					const utcTimestamp = new Date(startDate + 'T00:00:00.000Z').getTime();
 					const startTimestamp = utcTimestamp + (timezoneOffset * 60 * 1000);
-					conditions.push(`${timestampColumn} >= ?`);
+					conditions.push(`timestamp >= ?`);
 					params.push(startTimestamp);
 				}
 
@@ -141,7 +105,7 @@ export default config({
 					// We want end of day (23:59:59.999) in client's local timezone
 					const utcTimestamp = new Date(endDate + 'T23:59:59.999Z').getTime();
 					const endTimestamp = utcTimestamp + (timezoneOffset * 60 * 1000);
-					conditions.push(`${timestampColumn} <= ?`);
+					conditions.push(`timestamp <= ?`);
 					params.push(endTimestamp);
 				}
 
@@ -149,7 +113,7 @@ export default config({
 					query += ' WHERE ' + conditions.join(' AND ');
 				}
 
-				query += ` ORDER BY ${timestampColumn} ASC`;
+				query += ` ORDER BY timestamp ASC`;
 
                 console.log('Querying database:' + query)
                 console.log('Parameters:' + params)
@@ -157,35 +121,15 @@ export default config({
 				const stmt = db.prepare(query);
 				const results = stmt.all(...params) as any[];
 
-				// Generate CSV based on dataType
+				// Generate CSV
 				let csv = '';
 				let filename = '';
 
-				if (dataType === "STATE") {
-					// STATE: snapshots table
-					csv = 'id,timestamp,server_time,room_id,round_number,phase,target_zone,players,created_at\n';
-					results.forEach((row) => {
-						csv += `${row.id},${row.timestamp},${row.server_time},${row.room_id},${row.round_number || ''},${row.phase || ''},${row.target_zone || ''},"${row.players.replace(/"/g, '""')}",${row.created_at}\n`;
-					});
-					filename = 'state-snapshots-export.csv';
-				} else if (dataType === "PLAYER") {
-					// PLAYER: player_snapshots table
-					csv = 'id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,created_at\n';
-					results.forEach((row) => {
-						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
-						csv += `${row.id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.created_at}\n`;
-					});
-					filename = 'player-snapshots-export.csv';
-				} else {
-					// JOIN: both tables combined
-					csv = 'player_snapshot_id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,player_created_at,state_snapshot_id,server_time,phase,target_zone,state_players,state_created_at\n';
-					results.forEach((row) => {
-						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
-						const statePlayers = row.players ? row.players.replace(/"/g, '""') : '';
-						csv += `${row.player_snapshot_id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.player_created_at},${row.state_snapshot_id},${row.server_time},${row.phase || ''},${row.target_zone || ''},"${statePlayers}",${row.state_created_at}\n`;
-					});
-					filename = 'combined-export.csv';
-				}
+				csv = 'id,timestamp,server_time,room_id,round_number,phase,target_zone,players,created_at\n';
+				results.forEach((row) => {
+					csv += `${row.id},${row.timestamp},${row.server_time},${row.room_id},${row.round_number || ''},${row.phase || ''},${row.target_zone || ''},"${row.players.replace(/"/g, '""')}",${row.created_at}\n`;
+				});
+				filename = 'state-snapshots-export.csv';
 
 				res.setHeader('Content-Type', 'text/csv');
 				res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
