@@ -11,6 +11,17 @@ import { transcode } from 'node:buffer';
 class DataLogger {
 	private static instance: DataLogger | undefined = undefined;
 	private static db: Database.Database;
+	private snapshotQueue: Array<{
+		timestamp: number;
+		serverTime: number;
+		roomId: string;
+		phase?: string;
+		targetZone?: string;
+		players: any[];
+	}> = [];
+	private flushInterval: NodeJS.Timeout | null = null;
+	private readonly BATCH_SIZE = 50; // Flush after 50 snapshots
+	private readonly FLUSH_INTERVAL_MS = 1000; // Or flush every 1 second
 
 	private constructor() {
 		const dataDir = process.env.DB_DIR || path.join(__dirname, '../data');
@@ -34,6 +45,9 @@ class DataLogger {
 
 		// Initialize database schema
 		this.initSchema();
+
+		// Start periodic flush timer
+		this.startFlushTimer();
 	}
 
 	/**
@@ -83,7 +97,7 @@ class DataLogger {
 	}
 
 	/**
-     * Log a game state snapshot
+     * Log a game state snapshot (queued for batch insert)
      */
 	logSnapshot(data: {
 		timestamp: number;
@@ -93,29 +107,62 @@ class DataLogger {
 		targetZone?: string;
 		players: any[];
 	}): void {
+		// Add to queue
+		this.snapshotQueue.push(data);
+
+		// Flush immediately if batch size reached
+		if (this.snapshotQueue.length >= this.BATCH_SIZE) {
+			this.flushSnapshots();
+		}
+	}
+
+	/**
+	 * Start periodic flush timer
+	 */
+	private startFlushTimer(): void {
+		this.flushInterval = setInterval(() => {
+			if (this.snapshotQueue.length > 0) {
+				this.flushSnapshots();
+			}
+		}, this.FLUSH_INTERVAL_MS);
+	}
+
+	/**
+	 * Flush all queued snapshots to database in a single transaction
+	 */
+	private flushSnapshots(): void {
+		if (this.snapshotQueue.length === 0) return;
+
+		// Get snapshots to flush and clear queue
+		const snapshots = [...this.snapshotQueue];
+		this.snapshotQueue = [];
+
 		try {
-			// Use a transaction to ensure both tables are updated atomically
+			// Insert all snapshots in a single transaction
 			const transaction = DataLogger.db.transaction(() => {
-				// Insert into snapshots table
 				const snapshotStmt = DataLogger.db.prepare(`
                     INSERT INTO snapshots (timestamp, server_time, room_id, phase, target_zone, players)
                     VALUES (?, ?, ?, ?, ?, ?)
                 `);
 
-				const result = snapshotStmt.run(
-					data.timestamp,
-					data.serverTime,
-					data.roomId,
-					data.phase ?? null,
-					data.targetZone ?? null,
-					JSON.stringify(data.players),
-				);
-                console.log('Snapshot:', result)
+				for (const data of snapshots) {
+					snapshotStmt.run(
+						data.timestamp,
+						data.serverTime,
+						data.roomId,
+						data.phase ?? null,
+						data.targetZone ?? null,
+						JSON.stringify(data.players),
+					);
+				}
 			});
 
 			transaction();
+			console.log(`Flushed ${snapshots.length} snapshots to database`);
 		} catch (error) {
-			console.error('Failed to log snapshot:', error);
+			console.error('Failed to flush snapshots:', error);
+			// Re-add failed snapshots to front of queue
+			this.snapshotQueue.unshift(...snapshots);
 		}
 	}
 
@@ -201,6 +248,18 @@ class DataLogger {
      * Close database connection (call on server shutdown)
      */
 	close(): void {
+		// Stop flush timer
+		if (this.flushInterval) {
+			clearInterval(this.flushInterval);
+			this.flushInterval = null;
+		}
+
+		// Flush any remaining snapshots
+		if (this.snapshotQueue.length > 0) {
+			console.log('Flushing remaining snapshots before closing...');
+			this.flushSnapshots();
+		}
+
 		if (DataLogger.db) {
 			DataLogger.db.close();
 			console.log('Database connection closed');
