@@ -101,7 +101,7 @@ export default class GameScene extends Phaser.Scene {
             // Create an arc (circle) for this zone
             const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
             entity.setDepth(-1);
-            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.informed) {
+            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.aware) {
                 entity.setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
             }
             this.zoneEntities[zone.id] = entity;
@@ -112,7 +112,7 @@ export default class GameScene extends Phaser.Scene {
 
             // Clear stroke from all zones
             Object.keys(this.zoneEntities).forEach((zoneId) => {
-                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
+                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
                     this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
                 }
                 else {
@@ -181,7 +181,7 @@ export default class GameScene extends Phaser.Scene {
 
                 if (player === this.getCurrentPlayer()) {
                     Object.keys(this.zoneEntities).forEach((zoneId) => {
-                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.informed) {
+                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
                             this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
                         }
                         else {
@@ -482,7 +482,7 @@ export default class GameScene extends Phaser.Scene {
                 target_zone: this.room.state.targetZone,
                 player_points: currentPlayer.points,
                 phase: this.room.state.phase,
-                informed: currentPlayer.informed,
+                aware: currentPlayer.aware,
                 ready: currentPlayer.ready,
                 distance: currentPlayer.distance,
                 emoteCount: currentPlayer.emoteCount,
@@ -515,7 +515,7 @@ export default class GameScene extends Phaser.Scene {
         room_id?: string;
         target_zone?: number;
         player_points?: number;
-        informed?: boolean;
+        aware?: boolean;
         phase?: number;
         ready?: boolean;
         distance?: number;
@@ -532,7 +532,7 @@ export default class GameScene extends Phaser.Scene {
             'Zone': params.zone_id?.toString(),
             'Target Zone': params.target_zone?.toString(),
             'Player Points': params.player_points?.toString(),
-            'Informed': params.informed?.toString(),
+            'Aware': params.aware?.toString(),
             'Phase': phase_string?.toString(),
             'Player Ready': params.ready?.toString(),
             'Distance traveled': params.distance?.toString(),

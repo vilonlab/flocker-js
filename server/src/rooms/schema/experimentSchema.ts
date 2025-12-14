@@ -20,7 +20,7 @@ class Player extends Schema {
     @type('number') zone = -1;
     @type('number') radius = config.player.radius;
     @type('boolean') host = false;
-    @type('boolean') informed = false;
+    @type('boolean') aware = false;
     @type('boolean') ready = false;
 	@type('number') distance = 0;
 	@type('number') emoteCount = 0;

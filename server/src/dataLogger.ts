@@ -70,7 +70,7 @@ class DataLogger {
                 player_id TEXT NOT NULL,
                 x REAL,
                 y REAL,
-                informed BOOLEAN,
+                aware BOOLEAN,
                 additional_data JSON,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
@@ -132,13 +132,13 @@ class DataLogger {
 
 				// // Insert each player into player_snapshots table
 				// const playerStmt = DataLogger.db.prepare(`
-                //     INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, player_id, x, y, informed, additional_data)
+                //     INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, player_id, x, y, aware, additional_data)
                 //     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 // `);
 
 				// for (const player of data.players) {
 				// 	// Extract common properties and store the rest in additional_data
-				// 	const {id, x, y, informed, ...additionalData} = player;
+				// 	const {id, x, y, aware, ...additionalData} = player;
 
 				// 	playerStmt.run(
 				// 		snapshotId,
@@ -147,7 +147,7 @@ class DataLogger {
 				// 		id ?? null,
 				// 		x ?? null,
 				// 		y ?? null,
-				// 		informed ?? null,
+				// 		aware ?? null,
 				// 		Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
 				// 	);
 				// }

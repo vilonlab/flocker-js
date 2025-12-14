@@ -107,7 +107,7 @@ export default config({
                         player_snapshots.player_id,
                         player_snapshots.x,
                         player_snapshots.y,
-                        player_snapshots.informed,
+                        player_snapshots.aware,
                         player_snapshots.additional_data,
                         player_snapshots.created_at as player_created_at,
                         snapshots.id as state_snapshot_id,
@@ -170,19 +170,19 @@ export default config({
 					filename = 'state-snapshots-export.csv';
 				} else if (dataType === "PLAYER") {
 					// PLAYER: player_snapshots table
-					csv = 'id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,created_at\n';
+					csv = 'id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,aware,additional_data,created_at\n';
 					results.forEach((row) => {
 						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
-						csv += `${row.id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.created_at}\n`;
+						csv += `${row.id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.aware !== null ? row.aware : ''},"${additionalData}",${row.created_at}\n`;
 					});
 					filename = 'player-snapshots-export.csv';
 				} else {
 					// JOIN: both tables combined
-					csv = 'player_snapshot_id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,informed,additional_data,player_created_at,state_snapshot_id,server_time,phase,target_zone,state_players,state_created_at\n';
+					csv = 'player_snapshot_id,snapshot_id,timestamp,room_id,round_number,player_id,x,y,aware,additional_data,player_created_at,state_snapshot_id,server_time,phase,target_zone,state_players,state_created_at\n';
 					results.forEach((row) => {
 						const additionalData = row.additional_data ? row.additional_data.replace(/"/g, '""') : '';
 						const statePlayers = row.players ? row.players.replace(/"/g, '""') : '';
-						csv += `${row.player_snapshot_id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.informed !== null ? row.informed : ''},"${additionalData}",${row.player_created_at},${row.state_snapshot_id},${row.server_time},${row.phase || ''},${row.target_zone || ''},"${statePlayers}",${row.state_created_at}\n`;
+						csv += `${row.player_snapshot_id},${row.snapshot_id},${row.timestamp},${row.room_id},${row.round_number || ''},${row.player_id || ''},${row.x || ''},${row.y || ''},${row.aware !== null ? row.aware : ''},"${additionalData}",${row.player_created_at},${row.state_snapshot_id},${row.server_time},${row.phase || ''},${row.target_zone || ''},"${statePlayers}",${row.state_created_at}\n`;
 					});
 					filename = 'combined-export.csv';
 				}

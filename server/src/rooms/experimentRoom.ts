@@ -173,22 +173,22 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log(`Current phase: ${this.state.phase}`);
 	}
 
-    private selectInformed(maxInformed: number = this.state.players.size * config.round.informedRatio) {
-        maxInformed = Math.ceil(maxInformed);
+    private selectAware(maxAware: number = this.state.players.size * config.round.awareRatio) {
+        maxAware = Math.ceil(maxAware);
         const playerArray = Array.from(this.state.players.values());
         const indices = Array.from({length: playerArray.length}, (_, i) => i);
-        
+
         // Shuffle array using Fisher-Yates
         for (let i = indices.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [indices[i], indices[j]] = [indices[j], indices[i]];
         }
-        
-        // Take first maxInformed indices
-        const informedIndices = new Set(indices.slice(0, maxInformed));
-        
+
+        // Take first maxAware indices
+        const awareIndices = new Set(indices.slice(0, maxAware));
+
         playerArray.forEach((player, index) => {
-            player.informed = informedIndices.has(index);
+            player.aware = awareIndices.has(index);
         });
     }
 
@@ -225,7 +225,7 @@ export class ExperimentRoom extends Room<RoomState> {
             // Set room phase to WAITING, preventing the room counter from starting
             this.state.phase = Phase.WAITING;
 
-            // Reset player variables, choose new target zone, update informed
+            // Reset player variables, choose new target zone, update aware
             this.resetRoom();
 
             // Start next round
@@ -246,8 +246,8 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.state.roundNumber += 1;
 		console.log('Current round: ', this.state.roundNumber);
 
-        // Select informed players
-        this.selectInformed();
+        // Select aware players
+        this.selectAware();
 
 
 
@@ -487,7 +487,7 @@ export class ExperimentRoom extends Room<RoomState> {
 						id: sessionId,
 						x: player.x,
 						y: player.y,
-						informed: player.informed,
+						aware: player.aware,
 						name: player.name,
 						color: player.color,
 						textColor: player.textColor,
@@ -509,7 +509,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.startRoundTimer(); // Start round timer
 		this.resetRoom();
 		this.waitForPlayerReady(); // Wait for all players to ready before starting round
-		this.selectInformed();
+		this.selectAware();
 	}
 }
 
