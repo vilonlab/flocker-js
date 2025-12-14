@@ -62,20 +62,6 @@ class DataLogger {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
 
-            CREATE TABLE IF NOT EXISTS player_snapshots (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                snapshot_id INTEGER NOT NULL,
-                timestamp INTEGER NOT NULL,
-                room_id TEXT NOT NULL,
-                player_id TEXT NOT NULL,
-                x REAL,
-                y REAL,
-                aware BOOLEAN,
-                additional_data JSON,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE
-            );
-
             CREATE TABLE IF NOT EXISTS player_data (
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT,
@@ -87,9 +73,6 @@ class DataLogger {
 
             CREATE INDEX IF NOT EXISTS idx_snapshots_room_time
                 ON snapshots(room_id, timestamp);
-
-            CREATE INDEX IF NOT EXISTS idx_player_snapshots_player_time
-                ON player_snapshots(player_id, timestamp);
 
             CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
                 ON player_snapshots(snapshot_id);
@@ -127,30 +110,6 @@ class DataLogger {
 					data.targetZone ?? null,
 					JSON.stringify(data.players),
 				);
-
-				// const snapshotId = result.lastInsertRowid;
-
-				// // Insert each player into player_snapshots table
-				// const playerStmt = DataLogger.db.prepare(`
-                //     INSERT INTO player_snapshots (snapshot_id, timestamp, room_id, player_id, x, y, aware, additional_data)
-                //     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                // `);
-
-				// for (const player of data.players) {
-				// 	// Extract common properties and store the rest in additional_data
-				// 	const {id, x, y, aware, ...additionalData} = player;
-
-				// 	playerStmt.run(
-				// 		snapshotId,
-				// 		data.timestamp,
-				// 		data.roomId,
-				// 		id ?? null,
-				// 		x ?? null,
-				// 		y ?? null,
-				// 		aware ?? null,
-				// 		Object.keys(additionalData).length > 0 ? JSON.stringify(additionalData) : null,
-				// 	);
-				// }
                 console.log('Snapshot:', result)
 			});
 
