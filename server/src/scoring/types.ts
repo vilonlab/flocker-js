@@ -15,5 +15,22 @@ export type ScoringResult = {
  */
 export type ScoringStrategy = (
   players: MapSchema<Player>,
-  gameState: RoomState
+  gameState: RoomState,
 ) => ScoringResult;
+
+/**
+ * Configuration for a scoring strategy including metadata and behavior
+ */
+export interface ScoringStrategyConfig {
+  /** Human-readable name of the strategy */
+  name: string;
+
+  /** Objective/instructions shown to players explaining the goal */
+  objective: string;
+
+  /** The scoring calculation function */
+  calculate: ScoringStrategy;
+
+  /** Whether this strategy uses collective scoring */
+  isCollective: boolean;
+}

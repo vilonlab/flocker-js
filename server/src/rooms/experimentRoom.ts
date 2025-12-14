@@ -8,7 +8,7 @@ import { faker } from '@faker-js/faker';
 import { kMaxLength } from 'node:buffer';
 import { ad } from '@faker-js/faker/dist/airline-DF6RqYmq';
 import { scoringStrategies } from '../scoring/scoringStrategies';
-import { ScoringStrategy } from '../scoring/types';
+import { ScoringStrategyConfig } from '../scoring/types';
 
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
@@ -22,7 +22,7 @@ export class ExperimentRoom extends Room<RoomState> {
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private playerLock = true; // Prevent players from moving or using emotes
 	private lastRound = config.game.rounds;
-	private currentScoringStrategy: ScoringStrategy = scoringStrategies.COLLECTIVE_ZONE_COUNT;
+	private currentScoringStrategy: ScoringStrategyConfig = scoringStrategies.COLLECTIVE_ZONE_COUNT;
 
 	// Called when first player connects
 	onCreate(options: any) {
@@ -32,7 +32,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.initializeZones(); // Create zones
 		this.state.phase = Phase.LOBBY; // Set initial phase
 
-		this.state.isCollectiveScoring = true; // Set flag if currentScoringStrategy is collective (hardcoded)
+		this.state.isCollectiveScoring = this.currentScoringStrategy.isCollective;
 	
         this.clock.start(); // Start room clock, used for async events
 	}
@@ -173,7 +173,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log(`Current phase: ${this.state.phase}`);
 	}
 
-    private selectAware(maxAware: number = this.state.players.size * config.round.awareRatio) {
+    private selectAware(maxAware: number = this.state.players.size * config.game.awareMax) {
         maxAware = Math.ceil(maxAware);
         const playerArray = Array.from(this.state.players.values());
         const indices = Array.from({length: playerArray.length}, (_, i) => i);
@@ -194,7 +194,7 @@ export class ExperimentRoom extends Room<RoomState> {
 
     private scorePlayers() {
         // Use the current scoring strategy to calculate scores
-        const result = this.currentScoringStrategy(this.state.players, this.state);
+        const result = this.currentScoringStrategy.calculate(this.state.players, this.state);
 
         // Apply individual scores to players
         result.individualScores.forEach((points, sessionId) => {
