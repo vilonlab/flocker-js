@@ -3,6 +3,7 @@ import * as Colyseus from 'colyseus.js';
 import { Player, Zone, RoomState, Phase } from '../../../server/src/rooms/schema/experimentSchema';
 import { BACKEND_HTTP_URL, BACKEND_URL } from "../backend";
 import { config } from '../config';
+import {darkenColor, lightenColor} from '../utils';
 
 export default class GameScene extends Phaser.Scene {
     private playerSpeed = config.player.speed;
@@ -17,7 +18,7 @@ export default class GameScene extends Phaser.Scene {
     // Colyseus properties
     room: Colyseus.Room<RoomState>;
     playerEntities: { [sessionId: string]: Phaser.GameObjects.Container } = {};
-	zoneEntities: { [zoneId: string]: Phaser.GameObjects.Arc } = {};
+	zoneEntities: { [zoneId: string]: Phaser.GameObjects.Container } = {};
     cursorKeys: Phaser.Types.Input.Keyboard.CursorKeys;
     keys: { [key: string]: Phaser.Input.Keyboard.Key };
     playersGroup: Phaser.Physics.Arcade.Group;
@@ -35,8 +36,23 @@ export default class GameScene extends Phaser.Scene {
         super({ key: "experiment" });
     }
 
-    // preload() {
-    // }
+    preload() {
+        // Load game background image
+        const bg_url = new URL('../assets/BACKGROUND-FLOOR.png', import.meta.url);
+        this.load.image('background', bg_url.toString());
+
+        // Load zone images
+        const zone_center_url = new URL('../assets/TRANSPORTER-CENTER.png', import.meta.url);
+        const zone_url = new URL('../assets/TRANSPORTER-FULL.png', import.meta.url);
+        this.load.image('zone-center', zone_center_url.toString());
+        this.load.image('zone', zone_url.toString());
+
+        // Load player images
+        const player_url = new URL('../assets/PLAYER-BASE.png', import.meta.url);
+        const player_color_url = new URL('../assets/PLAYER-COLOR-DETAIL.png', import.meta.url);
+        this.load.image('player', player_url.toString());
+        this.load.image('player-color', player_color_url.toString());
+    }
 
     async create(data?: { room?: Colyseus.Room<RoomState> }) {
         this.cursorKeys = this.input.keyboard!.createCursorKeys();
@@ -49,7 +65,11 @@ export default class GameScene extends Phaser.Scene {
             'FOUR': Phaser.Input.Keyboard.KeyCodes.FOUR,
         }) as { [key: string]: Phaser.Input.Keyboard.Key };
 
-        this.cameras.main.setBackgroundColor(0xFFFFFF);
+        // this.cameras.main.setBackgroundColor(0xFFFFFF);
+        const bg = this.add.image(config.game.width/2, config.game.height/2, 'background');
+        bg.setDisplaySize(config.game.width, config.game.height);
+        bg.setDepth(-100);
+
 
         // Check if room was passed from MMScene, otherwise connect directly
         if (data?.room) {
@@ -95,55 +115,84 @@ export default class GameScene extends Phaser.Scene {
         // Handle new zones added after we join
         $(this.room.state).zones.onAdd((zone, zoneId) => {
             console.log("New zone added:", zoneId, zone);
-            // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
+
             const colorNumber = parseInt(zone.color.replace('#', ''), 16);
 
-            // Create an arc (circle) for this zone
-            const entity = this.add.arc(zone.x, zone.y, zone.radius, 0, 360, false, colorNumber, config.zones.opacity);
-            entity.setDepth(-1);
-            if (this.room.state.targetZone === zone.id && this.room.state.players.get(this.room.sessionId)?.aware) {
-                entity.setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
-            }
-            this.zoneEntities[zone.id] = entity;
+            // Create zone background image (full transporter)
+            const zoneBg = this.add.image(0, 0, 'zone');
+            zoneBg.setDisplaySize(zone.radius * 2, zone.radius * 2);
+
+            // Create zone center image (center detail) with color tint
+            const zoneCenter = this.add.image(0, 0, 'zone-center');
+            zoneCenter.setDisplaySize(zone.radius * 2, zone.radius * 2);
+
+            // Create glow effect and deactivate
+            // const effect = zoneCenter.postFX?.addGlow(colorNumber, 4, 0, false);
+
+            // Set to dark by default (off state), will brighten when player is aware of target
+            const darkColor = darkenColor(colorNumber, 0.4);
+            zoneCenter.setTint(darkColor);
+
+            // Create a container to group the images
+            const container = this.add.container(zone.x, zone.y, [zoneBg, zoneCenter]);
+            container.setDepth(-1);
+
+            // Store reference to zone center and full color for later updates
+            (container as any).zoneCenter = zoneCenter;
+            (container as any).fullColor = colorNumber;
+            (container as any).darkColor = darkColor;
+            // (container as any).effect = effect;
+
+            this.zoneEntities[zone.id] = container;
         });
 
-        // Listen for targetZone changes to update stroke
+        // Listen for targetZone changes to update zone brightness
         $(this.room.state).listen('targetZone', (value) => {
-
-            // Clear stroke from all zones
-            Object.keys(this.zoneEntities).forEach((zoneId) => {
-                if (zoneId === value.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
-                    this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
-                }
-                else {
-                    this.zoneEntities[zoneId].setStrokeStyle(0);
-                }
-            });
+            this.updateZoneBrightness();
         });
 
         // Handle new players added after we join
         $(this.room.state).players.onAdd((player, sessionId) => {
             console.log("New player added:", sessionId, player);
 
+
             // Convert hex color string to number (e.g., "#FF0000" -> 0xFF0000)
             const colorNumber = parseInt(player.color.replace('#', ''), 16);
 
+            // Add player sprite
+            const playerBg = this.add.image(0, 0, 'player');
+            playerBg.setDisplaySize(player.radius * 2, player.radius * 2);
+            playerBg.setDepth(1);
+
+            // Add player sprite color details
+            const playerDetail = this.add.image(0, 0, 'player-color');
+            playerDetail.setDisplaySize(player.radius * 2, player.radius * 2);
+            playerDetail.setTint(colorNumber);
+            playerDetail.setDepth(2);
+
             // Create an arc (circle) for the player
-            const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
+            // const circle = this.add.arc(0, 0, player.radius, 0, 360, false, colorNumber, 1);
 
             // Add a drop shadow to the player
             // circle.postFX?.addShadow(0, 0.5, 0.05, 1, 0x000000, 10, 0.5);
 
-            // Create text to display the emote in the middle of the circle
+            // Create text to display the emote on the player's screen
             const text = this.add.text(0, 0, player.emote.toString(), {
                 fontSize: config.ui.playerText.fontSize,
-                color: player.textColor,
+                color: config.ui.playerText.color,
                 fontStyle: config.ui.playerText.fontStyle
             });
-            text.setOrigin(0.5, 0.5); // Center the text
+            text.setOrigin(0.5, 0.5); // Center the text on its position
+            text.setDepth(3);
+
+            // Offset the text to align with the screen on the sprite
+            // Adjust these values to match your sprite's screen position
+            text.setPosition(player.radius * 0.2, 0); // Example: move up 20% of radius
 
             // Create a container to group the circle and text
-            const container = this.add.container(player.x, player.y, [circle, text]);
+            const container = this.add.container(player.x, player.y,
+                [playerBg, playerDetail, text]
+            );
 
             // Enable physics on the container
             this.physics.world.enable(container);
@@ -176,21 +225,23 @@ export default class GameScene extends Phaser.Scene {
                 container.y = player.y;
 
                 // Update the emote text for all players
-                const textElement = container.getAt(1) as Phaser.GameObjects.Text;
+                const textElement = container.getAt(2) as Phaser.GameObjects.Text;
                 textElement.setText(player.emote.toString());
 
-                if (player === this.getCurrentPlayer()) {
-                    Object.keys(this.zoneEntities).forEach((zoneId) => {
-                        if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
-                            this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
-                        }
-                        else {
-                            this.zoneEntities[zoneId].setStrokeStyle(0);
-                        }
-                    });
-                }
+                // if (player === this.getCurrentPlayer()) {
+                //     Object.keys(this.zoneEntities).forEach((zoneId) => {
+                //         if (zoneId === this.room.state.targetZone.toString() && this.room.state.players.get(this.room.sessionId)?.aware) {
+                //             this.zoneEntities[zoneId].setStrokeStyle(config.zones.targetWidth, config.zones.targetColor);
+                //         }
+                //         else {
+                //             this.zoneEntities[zoneId].setStrokeStyle(0);
+                //         }
+                //     });
+                // }
+
 
             });
+            
         });
 
         // remove local reference when entity is removed from the server
@@ -552,6 +603,36 @@ export default class GameScene extends Phaser.Scene {
         return null;
     }
 
+    private updateZoneBrightness() {
+        const currentPlayer = this.getCurrentPlayer();
+        if (!currentPlayer) return;
+
+        // Update all zones based on whether they're the target and player is aware
+        Object.keys(this.zoneEntities).forEach((zoneId) => {
+            const container = this.zoneEntities[zoneId];
+            const zoneCenter = (container as any).zoneCenter as Phaser.GameObjects.Image;
+            const fullColor = (container as any).fullColor;
+            const darkColor = (container as any).darkColor;
+            const effect = (container as any).effect;
+
+            // Brighten (glow) if this is the target zone and player is aware
+            if (zoneId === this.room.state.targetZone.toString() && currentPlayer.aware) {
+                zoneCenter.setTint(fullColor);
+                if (!effect) {
+                    const newEffect = zoneCenter.postFX?.addGlow(lightenColor(fullColor), 4, 2, false);
+                    (container as any).effect = newEffect;
+                }
+            } else {
+                // Darken (off state) for all other zones
+                zoneCenter.setTint(darkColor);
+                if (effect) {
+                    zoneCenter.postFX.remove(effect);
+                    (container as any).effect = undefined;
+                }
+            }
+        });
+    }
+
     private showScoreboard() {
         // Clear existing scoreboard if it exists
         if (this.scoreboardContainer) {
@@ -576,9 +657,15 @@ export default class GameScene extends Phaser.Scene {
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
         const boardWidth = 500;
-        // Add extra space for collective score text (110 vs 70 for first player row start)
-        // const boardHeight = this.room.state.isCollectiveScoring ? 110 + players.length * 50 : 60 + players.length * 50;
-        const boardHeight = this.room.state.isCollectiveScoring ? 110 : 60 + players.length * 50;
+
+        let boardHeight = 0;
+        if (config.ui.scoreboard.showPlayers) {
+            boardHeight = this.room.state.isCollectiveScoring ? 110 + players.length * 50 : 60 + players.length * 50;
+        }
+        else {
+            boardHeight = this.room.state.isCollectiveScoring ? 110 : 60 + players.length * 50;
+        }
+
         const startY = centerY - boardHeight / 2;
 
         // Add ready button if it doesn't already exist
@@ -645,53 +732,54 @@ export default class GameScene extends Phaser.Scene {
         players.forEach((player, index) => {
             scoreDelta += player.roundPoints;
 
-            return;
+            // to be edited later, add config variable enables showing individual player scores
+            if (config.ui.scoreboard.showPlayers) {
+                const rowY = firstRowY + index * 50;
 
+                // Player rank
+                const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
+                    fontSize: '24px',
+                    color: '#000000'
+                });
+                rank.setOrigin(0, 0.5);
+                this.scoreboardContainer.add(rank);
 
+                // Player color indicator (small circle)
+                const colorCircle = this.add.arc(
+                    centerX - 130,
+                    rowY,
+                    12,
+                    0,
+                    360,
+                    false,
+                    parseInt(player.color.replace('#', ''), 16),
+                    1
+                );
+                this.scoreboardContainer.add(colorCircle);
 
-            const rowY = firstRowY + index * 50;
+                // Player name
+                const nameText = this.add.text(centerX - 100, rowY, player.name, {
+                    fontSize: '24px',
+                    color: '#000000'
+                });
+                nameText.setOrigin(0, 0.5);
+                this.scoreboardContainer.add(nameText);
 
-            // Player rank
-            const rank = this.add.text(centerX - 160, rowY, `${index + 1}.`, {
-                fontSize: '24px',
-                color: '#000000'
-            });
-            rank.setOrigin(0, 0.5);
-            this.scoreboardContainer.add(rank);
+                const pointsDisplay = this.room.state.isCollectiveScoring
+                    ? (player.roundPoints === 0 ? '-' : `+${player.roundPoints}`)
+                    : `${player.points} pts`;
 
-            // Player color indicator (small circle)
-            const colorCircle = this.add.arc(
-                centerX - 130,
-                rowY,
-                12,
-                0,
-                360,
-                false,
-                parseInt(player.color.replace('#', ''), 16),
-                1
-            );
-            // this.scoreboardContainer.add(colorCircle);
+                // Player points
+                const pointsText = this.add.text(centerX + 210, rowY, pointsDisplay, {
+                    fontSize: '24px',
+                    color: '#000000',
+                    fontStyle: 'bold'
+                });
+                pointsText.setOrigin(1, 0.5);
+                this.scoreboardContainer.add(pointsText);
+            } else {
 
-            // Player name
-            const nameText = this.add.text(centerX - 100, rowY, player.name, {
-                fontSize: '24px',
-                color: '#000000'
-            });
-            nameText.setOrigin(0, 0.5);
-            // this.scoreboardContainer.add(nameText);
-
-            const pointsDisplay = this.room.state.isCollectiveScoring
-                ? (player.roundPoints === 0 ? '-' : `+${player.roundPoints}`)
-                : `${player.points} pts`;
-
-            // Player points
-            const pointsText = this.add.text(centerX + 210, rowY, pointsDisplay, {
-                fontSize: '24px',
-                color: '#000000',
-                fontStyle: 'bold'
-            });
-            pointsText.setOrigin(1, 0.5);
-            // this.scoreboardContainer.add(pointsText);
+            }
         });
 
         if (this.room.state.isCollectiveScoring) {
@@ -709,9 +797,6 @@ export default class GameScene extends Phaser.Scene {
         // Set depth to ensure scoreboard is on top
         this.scoreboardContainer.setDepth(10);
         this.scoreboardContainer.setVisible(true);
-
-        // this.readyButton.setVisible(true);
-        // this.readyText.setVisible(true);
     }
 
     runScene(key: string, data?: any) {
