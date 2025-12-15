@@ -24,12 +24,17 @@ export const config = {
   zones: {
     radius: 120,
     offsetFromCenter: 225, // distance from center
-    minHueDifference: 90, // for distinct zone colors
+    colors: [  // colors for zones
+      '#0373fc',
+      '#bd0000',
+      '#009c12',
+      '#fff82b',
+    ],
   },
 
   // Player settings
   player: {
-    radius: 20,
+    radius: 30,
     startX: 600,
     startY: 400,
     minHueDifference: 60, // for distinct player colors
@@ -50,8 +55,8 @@ export const config = {
   },
 
   game : {
-    maxClients: 5,
-    minClients: 5,
+    maxClients: 2,
+    minClients: 2,
     rounds: 5,
     randomAware: false, // randomly assign new aware players each round
     awareMin: 0.1, // starting proportion of aware players

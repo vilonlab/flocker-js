@@ -113,15 +113,18 @@ export class ExperimentRoom extends Room<RoomState> {
     // Helper method to create zone
     private makeZone(id: number, x: number, y: number, radius: number): Zone {
         const zone = new Zone();
-
         zone.id = id;
 		zone.x = x;
 		zone.y = y;
 		zone.radius = radius;
-		// Generate distinct color for zone with dramatic hue separation
-		zone.color = generateDistinctColor(this.zoneHues, config.zones.minHueDifference);
 
+		if (id < config.zones.colors.length) {
+			zone.color = config.zones.colors[id];
+		} else {
+			zone.color = '#ffffff';
+		}
         return zone;
+		
     }
 
 	// Start the round timer
