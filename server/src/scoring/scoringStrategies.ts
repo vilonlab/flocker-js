@@ -27,7 +27,7 @@ export const scoringStrategies: Record<string, ScoringStrategyConfig> = {
 
   COLLECTIVE_ZONE_COUNT: {
     name: 'Collective Zone Scoring',
-    objective: 'Work together! The more players in the target zone, the more points everyone earns.',
+    objective: 'Earn points as a team. Everyone earns a point for each player in the target zone.',
     isCollective: true,
     calculate: (players, state) => {
       const scores = new Map<string, number>();

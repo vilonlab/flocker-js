@@ -158,7 +158,7 @@ class DataLogger {
 			});
 
 			transaction();
-			console.log(`Flushed ${snapshots.length} snapshots to database`);
+			// console.log(`Flushed ${snapshots.length} snapshots to database`);
 		} catch (error) {
 			console.error('Failed to flush snapshots:', error);
 			// Re-add failed snapshots to front of queue

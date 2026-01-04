@@ -33,6 +33,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.state.phase = Phase.LOBBY; // Set initial phase
 
 		this.state.isCollectiveScoring = this.currentScoringStrategy.isCollective;
+		this.state.instructionText = this.currentScoringStrategy.objective;
 	
         this.clock.start(); // Start room clock, used for async events
 	}
@@ -469,9 +470,6 @@ export class ExperimentRoom extends Room<RoomState> {
 
 	// Create four zones around the center of the screen
 	private initializeZones() {
-		
-		// const centerX = config.world.centerX;
-		// const centerY = config.world.centerY;
 		const centerX = config.world.width / 2;
 		const centerY = config.world.height / 2;
 		const zoneRadius = config.zones.radius;
@@ -498,8 +496,6 @@ export class ExperimentRoom extends Room<RoomState> {
 					timestamp: this.clock.currentTime, // Colyseus simulation time
 					serverTime: Date.now(), // Real-world timestamp
 					roomId: this.roomId,
-					// roundNumber: this.state.roundNumber,
-					// phase: this.state.phase,
 					targetZone: this.state.targetZone?.toString(),
 					players: [...this.state.players.entries()].map(([sessionId, player]) => ({
 						id: sessionId,
@@ -519,18 +515,48 @@ export class ExperimentRoom extends Room<RoomState> {
 		}, config.logging.snapshotInterval);
 	}
 
+	// Called before each state patch is broadcast to clients (at patch rate, default ~20/sec)
+	onBeforePatch() {
+		if (this.state.phase === Phase.ACTIVE) { // Only log snapshot if phase is ACTIVE
+			this.logger.logSnapshot({
+				timestamp: this.clock.currentTime, // Colyseus simulation time
+				serverTime: Date.now(), // Real-world timestamp
+				roomId: this.roomId,
+				targetZone: this.state.targetZone?.toString(),
+				players: [...this.state.players.entries()].map(([sessionId, player]) => ({
+					id: sessionId,
+					x: Math.round(player.x),
+					y: Math.round(player.y),
+					aware: player.aware,
+					name: player.name,
+					color: player.color,
+					textColor: player.textColor,
+					emote: player.emote,
+					zone: player.zone,
+					points: player.points,
+					ready: player.ready
+				})),
+			});
+		}
+	}
+
 	// Call once minimum players connect, start the game
-	private transitionFromLobby() {
-		this.initializeLogger(); // Start logger
-		this.state.phase = Phase.WAITING; // Set phase to WAITING
+	private async transitionFromLobby() {
+		// this.initializeLogger(); // Start logger
+		this.state.phase = Phase.INSTRUCTION;
+
+		// Wait 10 seconds in instruction phase before continuing
+		await new Promise<void>((resolve) => {
+			this.clock.setTimeout(() => {
+				resolve();
+			}, 20000);
+		});
+
+		this.state.phase = Phase.WAITING;
 		this.state.targetZone = randomInt(4); // Set random target zone
 		this.startRoundTimer(); // Start round timer
 		this.resetRoom();
 		this.waitForPlayerReady(); // Wait for all players to ready before starting round
 		this.selectAware();
 	}
-}
-
-async function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
 }

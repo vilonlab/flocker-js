@@ -10,6 +10,7 @@ export const config = {
     width: 1200,
     height: 800,
     backgroundColor: '#ffffff',
+    texturePack: 'space',
   },
 
   // Physics settings
