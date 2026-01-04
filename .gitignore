@@ -6,6 +6,9 @@ pi*
 *.sh
 rsync-*
 
+# static file drafts
+dev-assets/
+
 # local notes
 *.md
 

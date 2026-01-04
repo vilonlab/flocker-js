@@ -6,7 +6,8 @@ enum Phase {
     WAITING,
     SCOREBOARD,
 	LOBBY,
-	END
+	END,
+	INSTRUCTION,
 }
 
 class Player extends Schema {
@@ -47,6 +48,7 @@ class RoomState extends Schema {
 	@type('number') totalRounds = config.game.rounds;
 	@type('number') collectiveScore = 0;
 	@type('boolean') isCollectiveScoring = false;
+	@type('string') instructionText = '';
 }
 
 

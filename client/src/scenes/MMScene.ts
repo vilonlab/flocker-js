@@ -183,7 +183,7 @@ export default class MMScene extends Phaser.Scene {
         // console.log('Current state: ', this.room.state);
         // console.log('Room phase: ', this.room.state.phase);
 
-        if (this.room.state.phase === Phase.WAITING) {
+        if (this.room.state.phase === Phase.WAITING || this.room.state.phase === Phase.INSTRUCTION) {
             console.log('Current phase: ', this.room.state.phase, '; running experiment scene');
             this.runScene('experiment', { room: this.room });
         }
@@ -203,7 +203,6 @@ export default class MMScene extends Phaser.Scene {
         }
         return null;
     }
-
 
     runScene(key: string, data?: any) {
         this.scene.start(key, data);

@@ -23,10 +23,7 @@ export default class LobbyScene extends Phaser.Scene {
     }
 
     preload() {
-        // this.load.setBaseURL('/home/gus/Documents/Programming/flocker-js/phaser-demo/src/assets');
-        // const bg_url = new URL('space1.png', import.meta.url);
         const particle_url = new URL('../assets/base.png', import.meta.url);
-        // this.load.image('bg', bg_url.toString());
         this.load.image('particle', particle_url.toString());
     }
 
@@ -92,32 +89,6 @@ export default class LobbyScene extends Phaser.Scene {
             const index = this.sprites.push({s: image, t: Math.random() * 2 * Math.PI, x: start_x, y: start_y});
             console.log('Sprite created:', this.sprites[index-1].t);
         };
-
-        // // automatically navigate to hash scene if provided
-        // if (window.location.hash) {
-        //     this.runScene(window.location.hash.substring(1));
-        //     return;
-        // }
-
-        // const textStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-        //     color: "#ff0000",
-        //     fontSize: "32px",
-        //     // fontSize: "24px",
-        //     fontFamily: "Arial"
-        // };
-
-        // for (let partNum in this.parts) {
-        //     const index = parseInt(partNum) - 1;
-        //     const label = this.parts[partNum as keyof typeof this.parts][0];
-
-        //     // this.add.text(32, 32 + 32 * index, `Part ${partNum}: ${label}`, textStyle)
-        //     this.add.text(130, 150 + 70 * index, `Part ${partNum}: ${label}`, textStyle)
-        //         .setInteractive()
-        //         .setPadding(6)
-        //         .on("pointerdown", () => {
-        //             this.runScene(this.parts[partNum as keyof typeof this.parts][1]);
-        //         });
-        // }
     }
 
     update(): void {

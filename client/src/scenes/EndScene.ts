@@ -73,7 +73,8 @@ export default class EndScene extends Phaser.Scene {
             centerY,
             boardWidth,
             boardHeight,
-            0xffffff
+            0xffffff,
+            0.95
         );
         background.setStrokeStyle(4, 0x000000);
         this.scoreboardContainer.add(background);
@@ -220,7 +221,7 @@ export default class EndScene extends Phaser.Scene {
         }
 
         // Set depth to ensure scoreboard is on top
-        this.scoreboardContainer.setDepth(11);
+        this.scoreboardContainer.setDepth(1000);
         this.scoreboardContainer.setVisible(true);
     }
 

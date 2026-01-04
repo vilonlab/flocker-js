@@ -10,6 +10,7 @@ export const config = {
     width: 1200,
     height: 800,
     backgroundColor: '#ffffff',
+    texturePack: 'space',
   },
 
   // Physics settings
@@ -24,7 +25,7 @@ export const config = {
   // Player settings
   player: {
     speed: 2,
-    radius: 20, // Default player radius (can be overridden by server)
+    radius: 30, // Default player radius (can be overridden by server)
   },
 
   // Network update settings
@@ -37,7 +38,7 @@ export const config = {
   // UI settings
   ui: {
     debug: {
-      show: false,
+      show: true,
       color: '#ff0000',
       fontSize: '16px',
       position: { x: 0, y: 0 },
@@ -49,14 +50,17 @@ export const config = {
       prefix: 'Round Time: ',
     },
     playerText: {
-      fontSize: '24px',
+      fontSize: '20px',
       fontStyle: 'bold',
+      color: '#ffffff',
     },
+    scoreboard: {
+      showPlayers: true,
+    }
   },
 
   // Zone rendering settings
   zones: {
-    opacity: 0.2,
     targetWidth: 3,
     targetColor: 0xFFF700,
   },

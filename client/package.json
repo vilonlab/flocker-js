@@ -4,11 +4,13 @@
   "description": "Minimal Phaser demo with Colyseus integration",
   "scripts": {
     "start": "parcel index.html",
-    "build": "parcel build index.html"
+    "build": "parcel build index.html",
+    "load_assets": "cp -r ./src/assets ./dist/."
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^25.0.3",
     "buffer": "^6.0.3",
     "parcel": "^2.16.0",
     "process": "^0.11.10",
