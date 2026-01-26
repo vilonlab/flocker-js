@@ -169,60 +169,60 @@ class DataLogger {
     /**
      * Capture player metadata
      */
-    updatePlayerData(data: {
-		id?: string;
-		name?: string;
-		color?: string;
-		text_color?: string;
-		points?: number;
-		last_connection?: string;
-	}): string {
-        // if no id, generate one and store it
-        let id = "";
+    // updatePlayerData(data: {
+	// 	id?: string;
+	// 	name?: string;
+	// 	color?: string;
+	// 	text_color?: string;
+	// 	points?: number;
+	// 	last_connection?: string;
+	// }): string {
+    //     // if no id, generate one and store it
+    //     let id = "";
 
-        if (data.id) {
-            id = data.id;
-            const transaction = DataLogger.db.transaction(() => {
-                const stmt = DataLogger.db.prepare(`
-                    UPDATE player_data
-                    SET
-                        name = COALESCE(?, name),
-                        color = COALESCE(?, color),
-                        text_color = COALESCE(?, text_color),
-                        points = COALESCE(?, points),
-                        last_connection = COALESCE(?, last_connection)
-                    WHERE id = ?
-                `);
-                stmt.run(
-                data.name ?? null,
-                data.color ?? null,
-                data.text_color ?? null,
-                data.points ?? null,
-                data.last_connection ?? null,
-                id
-                );
-            });
-            transaction();
-        } else {
-            id = uuidv4();
-            const transaction = DataLogger.db.transaction(() => {
-                const stmt = DataLogger.db.prepare(`
-                    INSERT INTO player_data
-                    (id, name, color, text_color, points)
-                    VALUES (?, ?, ?, ?, ?)
-                `);
-                stmt.run(
-                    id,
-                    data.name ?? null,
-                    data.color ?? null,
-                    data.text_color ?? null,
-                    data.points ?? null,
-                );
-            });
-            transaction();
-        }
-        return id;
-    }
+    //     if (data.id) {
+    //         id = data.id;
+    //         const transaction = DataLogger.db.transaction(() => {
+    //             const stmt = DataLogger.db.prepare(`
+    //                 UPDATE player_data
+    //                 SET
+    //                     name = COALESCE(?, name),
+    //                     color = COALESCE(?, color),
+    //                     text_color = COALESCE(?, text_color),
+    //                     points = COALESCE(?, points),
+    //                     last_connection = COALESCE(?, last_connection)
+    //                 WHERE id = ?
+    //             `);
+    //             stmt.run(
+    //             data.name ?? null,
+    //             data.color ?? null,
+    //             data.text_color ?? null,
+    //             data.points ?? null,
+    //             data.last_connection ?? null,
+    //             id
+    //             );
+    //         });
+    //         transaction();
+    //     } else {
+    //         id = uuidv4();
+    //         const transaction = DataLogger.db.transaction(() => {
+    //             const stmt = DataLogger.db.prepare(`
+    //                 INSERT INTO player_data
+    //                 (id, name, color, text_color, points)
+    //                 VALUES (?, ?, ?, ?, ?)
+    //             `);
+    //             stmt.run(
+    //                 id,
+    //                 data.name ?? null,
+    //                 data.color ?? null,
+    //                 data.text_color ?? null,
+    //                 data.points ?? null,
+    //             );
+    //         });
+    //         transaction();
+    //     }
+    //     return id;
+    // }
 
     /**
      * Dedicated method to update player score

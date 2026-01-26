@@ -12,11 +12,6 @@ export default class LobbyScene extends Phaser.Scene {
     rooms: {[roomId: string]: Colyseus.Room<RoomState>} = {};
     sprites: {s: Phaser.GameObjects.Image, t: number, x: number, y:number}[] = [];
 
-    parts = {
-        '1': ["Join", "experiment"],
-        // '2': ["Other", ""],
-    };
-
     constructor() { 
         super({ key: "lobby", active: true });
         this.sprites = [];
@@ -28,9 +23,6 @@ export default class LobbyScene extends Phaser.Scene {
     }
 
     create() {
-
-        // this.add.image(400, 300, 'bg');
-
         // Add title text
         const titleText = this.add.text(
             config.game.width / 2,

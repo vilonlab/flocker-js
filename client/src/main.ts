@@ -63,15 +63,15 @@ async function ensureClientId(): Promise<string> {
   }
 }
 
-// const game = new Phaser.Game(config);
+const game = new Phaser.Game(config);
 
 // Ensure client ID is set before starting the game
-ensureClientId()
-  .then((clientId) => {
-    console.log('Starting game with client ID:', clientId);
-    const game = new Phaser.Game(config);
-  })
-  .catch((error) => {
-    console.error('Failed to initialize game:', error);
-    // You might want to show an error message to the user here
-  });
+// ensureClientId()
+//   .then((clientId) => {
+//     console.log('Starting game with client ID:', clientId);
+//     const game = new Phaser.Game(config);
+//   })
+//   .catch((error) => {
+//     console.error('Failed to initialize game:', error);
+//     // You might want to show an error message to the user here
+//   });
