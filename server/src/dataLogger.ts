@@ -88,8 +88,8 @@ class DataLogger {
             CREATE INDEX IF NOT EXISTS idx_snapshots_room_time
                 ON snapshots(room_id, timestamp);
 
-            CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
-                ON player_snapshots(snapshot_id);
+            // CREATE INDEX IF NOT EXISTS idx_player_snapshots_snapshot
+            //     ON player_snapshots(snapshot_id);
 
         `);
 

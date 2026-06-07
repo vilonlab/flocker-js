@@ -5,6 +5,13 @@ rsync-exclude.txt
 pi*
 *.sh
 rsync-*
+CODE_STRUCTURE_SUGGESTIONS.md
+notes.md
+CONFIG_ARCHITECTURE.md
+rsync-script/
+todo.md
+client/.parcel-cache/
+client/dist/
 
 # static file drafts
 dev-assets/
@@ -145,3 +152,4 @@ ehthumbs_vista.db
 # dist/
 # build/
 run-local
+
