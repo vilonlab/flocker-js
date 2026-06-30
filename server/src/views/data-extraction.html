@@ -259,7 +259,7 @@
                 const timezoneOffset = new Date().getTimezoneOffset();
 
                 // Build URL with query parameters
-                const url = `/app/admin/api/data?startDate=${startDate}&endDate=${endDate}&timezoneOffset=${timezoneOffset}`;
+                const url = `/flocker/app/admin/api/data?startDate=${startDate}&endDate=${endDate}&timezoneOffset=${timezoneOffset}`;
 
                 // Fetch the CSV
                 const response = await fetch(url);

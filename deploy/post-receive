@@ -1,0 +1,51 @@
+#!/bin/bash
+# Source of truth for the post-receive hook on the deploy server.
+#
+# This file is tracked in git for reference/review, but git hooks are NOT
+# transferred by push. To install it on the server:
+#
+#   cp deploy/post-receive ~/flocker.git/hooks/post-receive
+#   chmod +x ~/flocker.git/hooks/post-receive
+#
+# (Re-run that cp step any time you change this file.)
+
+set -e
+
+WORK_TREE="$HOME/flocker"
+GIT_DIR="$HOME/flocker.git"
+WEB_ROOT="/var/www/flocker"
+BRANCH="dev"
+PUBLIC_URL="/flocker/"
+
+mkdir -p "$WORK_TREE"
+
+while read -r oldrev newrev ref; do
+	if [ "$ref" != "refs/heads/$BRANCH" ]; then
+		echo "Ignoring push to $ref (only deploying $BRANCH)"
+		continue
+	fi
+
+	echo "==> Deploying $BRANCH ($newrev)"
+	git --work-tree="$WORK_TREE" --git-dir="$GIT_DIR" checkout -f "$BRANCH"
+
+	echo "==> Installing server dependencies"
+	npm install --prefix "$WORK_TREE/server"
+
+	echo "==> Installing client dependencies"
+	npm install --prefix "$WORK_TREE/client"
+
+	echo "==> Building client (public-url $PUBLIC_URL)"
+	npm run build --prefix "$WORK_TREE/client" -- --public-url "$PUBLIC_URL"
+
+	echo "==> Publishing client build to $WEB_ROOT"
+	rm -rf "${WEB_ROOT:?}"/*
+	cp -r "$WORK_TREE/client/dist/." "$WEB_ROOT/"
+
+	echo "==> Restarting server via pm2"
+	cd "$WORK_TREE/server"
+	pm2 startOrReload ecosystem.config.cjs
+
+	pm2 save
+
+	echo "==> Deploy complete"
+done
