@@ -15,7 +15,6 @@ WORK_TREE="$HOME/flocker"
 GIT_DIR="$HOME/flocker.git"
 WEB_ROOT="/var/www/flocker"
 BRANCH="dev"
-PUBLIC_URL="/flocker/"
 
 mkdir -p "$WORK_TREE"
 
@@ -34,8 +33,8 @@ while read -r oldrev newrev ref; do
 	echo "==> Installing client dependencies"
 	npm install --prefix "$WORK_TREE/client"
 
-	echo "==> Building client (public-url $PUBLIC_URL)"
-	npm run build --prefix "$WORK_TREE/client" -- --public-url "$PUBLIC_URL"
+	echo "==> Building client"
+	npm run build --prefix "$WORK_TREE/client"
 
 	echo "==> Publishing client build to $WEB_ROOT"
 	rm -rf "${WEB_ROOT:?}"/*

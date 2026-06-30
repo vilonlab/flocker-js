@@ -4,7 +4,7 @@
   "description": "Minimal Phaser demo with Colyseus integration",
   "scripts": {
     "start": "parcel index.html",
-    "build": "parcel build index.html",
+    "build": "parcel build index.html --public-url /flocker/ && npm run load_assets",
     "load_assets": "cp -r ./src/assets ./dist/."
   },
   "author": "",
