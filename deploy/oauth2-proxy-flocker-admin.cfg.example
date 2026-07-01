@@ -1,4 +1,4 @@
-# oauth2-proxy config for gating flocker's /flocker/app/admin/* endpoints.
+# oauth2-proxy config for gating flocker's /flocker/admin/* endpoints.
 #
 # Copy this to the server (NOT into git) as e.g. ~/oauth2-proxy/flocker-admin.cfg,
 # fill in client_id / client_secret / cookie_secret, then run:
@@ -14,7 +14,10 @@ http_address = "127.0.0.1:4180"
 reverse_proxy = true
 
 provider = "github"
-github_org = "vilonlab"
+
+# Explicit allow-list by GitHub username. No org/team check, so no need for
+# an org owner to approve the OAuth App in org settings.
+github_users = ["REPLACE_ME_1", "REPLACE_ME_2"]
 
 # From the GitHub OAuth App you registered:
 client_id = "REPLACE_ME"
