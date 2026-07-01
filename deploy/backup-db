@@ -1,0 +1,41 @@
+#!/bin/bash
+# Backs up the flocker sqlite database to Hetzner Object Storage.
+# Run daily via cron on gusb.xyz (not invoked by the deploy hook).
+#
+# One-time setup:
+#   1. Create a Hetzner Object Storage bucket + S3 access key/secret
+#      (Hetzner Cloud Console -> Object Storage).
+#   2. Configure an rclone remote named "hetzner" pointing at it -- see
+#      deploy/rclone.conf.example.
+#   3. Set a 30-day expiration lifecycle rule on the bucket so old backups
+#      prune themselves (see notes in that same example file).
+#   4. Add to crontab (`crontab -e`):
+#        0 3 * * * /home/gus/flocker/deploy/backup-db >> /home/gus/flocker-backup.log 2>&1
+
+set -euo pipefail
+
+DB_PATH="$HOME/flocker/server/data/flocker.db"
+REMOTE="hetzner:flocker-db-backups"
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+TMP_DIR="$(mktemp -d)"
+BACKUP_FILE="$TMP_DIR/flocker-$TIMESTAMP.db"
+
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+if [ ! -f "$DB_PATH" ]; then
+	echo "No database found at $DB_PATH, skipping backup"
+	exit 0
+fi
+
+echo "==> Snapshotting $DB_PATH"
+# VACUUM INTO takes a consistent, defragmented copy safely even with
+# concurrent WAL writers -- a plain `cp` of a WAL-mode db can be inconsistent.
+sqlite3 "$DB_PATH" "VACUUM INTO '$BACKUP_FILE'"
+
+echo "==> Compressing"
+gzip "$BACKUP_FILE"
+
+echo "==> Uploading to $REMOTE"
+rclone copy "$BACKUP_FILE.gz" "$REMOTE"
+
+echo "==> Backup complete: flocker-$TIMESTAMP.db.gz"
