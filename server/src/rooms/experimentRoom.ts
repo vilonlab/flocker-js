@@ -133,6 +133,37 @@ export class ExperimentRoom extends Room<RoomState> {
 		return [moveX, moveY];
 	}
 
+	// Push `player` out of any other player whose circle it now overlaps, so players can never
+	// stack on top of each other. Only `player`'s position is adjusted -- the other player(s)
+	// involved are left where they are, since each "move" message only has authority to move the
+	// player who sent it.
+	private resolvePlayerOverlap(player: Player, sessionId: string) {
+		this.state.players.forEach((other, otherSessionId) => {
+			if (otherSessionId === sessionId) {
+				return;
+			}
+
+			const dx = player.x - other.x;
+			const dy = player.y - other.y;
+			const minDist = player.radius + other.radius;
+			const dist = Math.hypot(dx, dy);
+
+			if (dist >= minDist) {
+				return;
+			}
+
+			const overlap = minDist - dist;
+
+			if (dist > 0) {
+				player.x += (dx / dist) * overlap;
+				player.y += (dy / dist) * overlap;
+			} else {
+				// Exactly coincident (e.g. simultaneous spawn) -- push along a fixed axis to avoid a divide-by-zero
+				player.x += overlap;
+			}
+		});
+	}
+
 	// Helper method to check player zone
 	private checkZone(player_x: number, player_y: number, player_radius?: number): number {
 		let zone_id: number = -1;
@@ -199,10 +230,13 @@ export class ExperimentRoom extends Room<RoomState> {
 	private resetRoom() {
 		console.log('Resetting room state...');
 
-		// Reset all players to center and clear their state
-		this.state.players.forEach((player) => {
-			player.x = config.player.startX;
-			player.y = config.player.startY;
+		// Reset all players to non-overlapping spawn positions and clear their state
+		const players = Array.from(this.state.players.values());
+		const spawnPositions = this.computeSpawnPositions(players.length);
+
+		players.forEach((player, index) => {
+			player.x = spawnPositions[index].x;
+			player.y = spawnPositions[index].y;
 			player.emote = '';
 			player.zone = -1;
             player.ready = false;
@@ -212,6 +246,22 @@ export class ExperimentRoom extends Room<RoomState> {
 		console.log('Room reset complete. Waiting for host to start next round.');
 		// this.state.phase = Phase.END;
 		console.log(`Current phase: ${this.state.phase}`);
+	}
+
+	// Spread `count` players evenly around a circle centered on the world's start position, so
+	// they never spawn on top of each other
+	private computeSpawnPositions(count: number): { x: number; y: number }[] {
+		const positions: { x: number; y: number }[] = [];
+
+		for (let i = 0; i < count; i++) {
+			const angle = (2 * Math.PI * i) / count;
+			positions.push({
+				x: config.player.startX + config.player.spawnRadius * Math.cos(angle),
+				y: config.player.startY + config.player.spawnRadius * Math.sin(angle),
+			});
+		}
+
+		return positions;
 	}
 
     private selectAware() {
@@ -436,6 +486,13 @@ export class ExperimentRoom extends Room<RoomState> {
 			const minY = player.radius;
 			const maxY = config.world.height - player.radius;
 
+			player.x = Math.max(minX, Math.min(maxX, player.x));
+			player.y = Math.max(minY, Math.min(maxY, player.y));
+
+			// Push the player out of any other player they've moved into, so they can never overlap
+			this.resolvePlayerOverlap(player, client.sessionId);
+
+			// Re-clamp to world bounds in case overlap resolution pushed the player back out
 			player.x = Math.max(minX, Math.min(maxX, player.x));
 			player.y = Math.max(minY, Math.min(maxY, player.y));
 

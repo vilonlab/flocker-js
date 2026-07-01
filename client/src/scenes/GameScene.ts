@@ -21,6 +21,7 @@ export default class GameScene extends Phaser.Scene {
     room: Colyseus.Room<RoomState>;
     playerEntities: { [sessionId: string]: Phaser.GameObjects.Container } = {};
 	zoneEntities: { [zoneId: string]: Phaser.GameObjects.Container } = {};
+	emoteEntities: { [sessionId: string]: Phaser.GameObjects.Container } = {};
     cursorKeys: Phaser.Types.Input.Keyboard.CursorKeys;
     keys: { [key: string]: Phaser.Input.Keyboard.Key };
     playersGroup: Phaser.Physics.Arcade.Group;
@@ -82,6 +83,14 @@ export default class GameScene extends Phaser.Scene {
         // Create physics group for players
         this.playersGroup = this.physics.add.group({
             collideWorldBounds: true,
+        });
+
+        // Fires when two player entities' circular bodies touch. The server is authoritative for
+        // position and already prevents players from overlapping (see resolvePlayerOverlap in
+        // experimentRoom.ts), so this collider is for local feedback only -- it does not need to
+        // (and should not try to) resolve the overlap itself.
+        this.physics.add.collider(this.playersGroup, this.playersGroup, (entityA, entityB) => {
+            console.log('Player entities collided:', entityA, entityB);
         });
 
         const $ = Colyseus.getStateCallbacks(this.room);
@@ -146,22 +155,9 @@ export default class GameScene extends Phaser.Scene {
             // Add a drop shadow to the player
             // circle.postFX?.addShadow(0, 0.5, 0.05, 1, 0x000000, 10, 0.5);
 
-            // Create text to display the emote on the player's screen
-            const text = this.add.text(0, 0, player.emote.toString(), {
-                fontSize: config.ui.playerText.fontSize,
-                color: config.ui.playerText.color,
-                fontStyle: config.ui.playerText.fontStyle
-            });
-            text.setOrigin(0.5, 0.5); // Center the text on its position
-            text.setDepth(3);
-
-            // Offset the text to align with the screen on the sprite
-            // Adjust these values to match your sprite's screen position
-            text.setPosition(player.radius * 0.2, 0); // Example: move up 20% of radius
-
-            // Create a container to group the circle and text
+            // Create a container to group the player sprite images
             const container = this.add.container(player.x, player.y,
-                [playerBg, playerDetail, text]
+                [playerBg, playerDetail]
             );
 
             // Enable physics on the container
@@ -180,17 +176,44 @@ export default class GameScene extends Phaser.Scene {
             // Add to players group for collision detection
             this.playersGroup.add(container);
 
+            // Speech bubble for the player's emote. Kept as its own top-level entity (not nested
+            // inside the player container, and not added to playersGroup) so it always renders
+            // above every player entity and never participates in collision.
+            const bubbleGraphics = this.add.graphics();
+            const bubbleText = this.add.text(0, 0, '', {
+                fontSize: config.ui.playerText.fontSize,
+                color: '#000000',
+                fontStyle: config.ui.playerText.fontStyle
+            }).setOrigin(0.5, 0.5);
+
+            const emoteContainer = this.add.container(
+                player.x,
+                player.y - player.radius - 20,
+                [bubbleGraphics, bubbleText]
+            );
+            emoteContainer.setDepth(50);
+            emoteContainer.setVisible(false);
+
+            this.emoteEntities[sessionId] = emoteContainer;
+
             // listening for server updates
             $(player).onChange(() => {
 
                 container.x = player.x;
                 container.y = player.y;
 
-                // Update the emote text for all players
-                const textElement = container.getAt(2) as Phaser.GameObjects.Text;
-                textElement.setText(player.emote.toString());
+                emoteContainer.x = player.x;
+                emoteContainer.y = player.y - player.radius - 20;
+
+                if (player.emote) {
+                    bubbleText.setText(player.emote.toString());
+                    this.drawSpeechBubble(bubbleGraphics, bubbleText);
+                    emoteContainer.setVisible(true);
+                } else {
+                    emoteContainer.setVisible(false);
+                }
             });
-            
+
         });
 
         // remove local reference when entity is removed from the server
@@ -200,6 +223,12 @@ export default class GameScene extends Phaser.Scene {
             if (entity) {
                 this.playersGroup.remove(entity, true, true); // remove from group and destroy
                 delete this.playerEntities[sessionId]
+            }
+
+            const emoteEntity = this.emoteEntities[sessionId];
+            if (emoteEntity) {
+                emoteEntity.destroy();
+                delete this.emoteEntities[sessionId];
             }
         });
 
@@ -517,6 +546,35 @@ export default class GameScene extends Phaser.Scene {
         if (this.countdownText) {
             this.countdownText.text = `Round starts in ${this.room.state.countdownTime}s`;
         }
+    }
+
+    // Redraw a speech-bubble background (white fill, black stroke, downward tail) sized to fit `text`
+    private drawSpeechBubble(graphics: Phaser.GameObjects.Graphics, text: Phaser.GameObjects.Text) {
+        const paddingX = 10;
+        const paddingY = 6;
+        const cornerRadius = 8;
+        const tailSize = 6;
+
+        const width = text.width + paddingX * 2;
+        const height = text.height + paddingY * 2;
+
+        graphics.clear();
+        graphics.fillStyle(0xffffff, 1);
+        graphics.lineStyle(2, 0x000000, 1);
+
+        graphics.fillRoundedRect(-width / 2, -height / 2, width, height, cornerRadius);
+        graphics.strokeRoundedRect(-width / 2, -height / 2, width, height, cornerRadius);
+
+        graphics.fillTriangle(
+            -tailSize, height / 2,
+            tailSize, height / 2,
+            0, height / 2 + tailSize
+        );
+        graphics.strokeTriangle(
+            -tailSize, height / 2,
+            tailSize, height / 2,
+            0, height / 2 + tailSize
+        );
     }
 
     private generateDebugText(params: {

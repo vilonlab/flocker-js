@@ -38,6 +38,7 @@ export const config = {
     radius: 30,
     startX: 600,
     startY: 400,
+    spawnRadius: 100, // distance from center players are spread out to when spawned, so they don't start overlapping
     minHueDifference: 60, // for distinct player colors
     minHueDifferenceFallback: 30, // when running out of colors
     emoteTimeout: 2000, // timeout for emote in ms
