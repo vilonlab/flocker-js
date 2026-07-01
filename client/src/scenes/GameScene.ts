@@ -215,11 +215,10 @@ export default class GameScene extends Phaser.Scene {
         const player = this.getCurrentPlayer();
 
         // Create timer UI
-        this.timerText = this.add.text(0, 0, '00:00', {
-            color: '#ff9100ff',
-            font: "VT323",
+        this.timerText = this.add.text(0, 0, '', {
+            color: '#000000',
             fontSize: '24px'
-        });
+        }).setStroke('#ffffff', 3);
 
         this.timerContainer = this.add.container(
             config.game.width - 100,
@@ -227,7 +226,7 @@ export default class GameScene extends Phaser.Scene {
             [this.timerText]
         );
 
-        this.timerText.setOrigin(0.5, 0);
+        this.timerText.setOrigin(1, 0);
         this.timerText.setPosition(0, 0);
         this.timerContainer.setDepth(100);
 
@@ -513,7 +512,7 @@ export default class GameScene extends Phaser.Scene {
             });
         }
 
-        this.timerText.text = this.room.state.roundTime > 9 ? "00:" + this.room.state.roundTime : "00:0" + this.room.state.roundTime;
+        this.timerText.text = `${this.room.state.roundTime} seconds left`;
 
         if (this.countdownText) {
             this.countdownText.text = `Round starts in ${this.room.state.countdownTime}s`;
