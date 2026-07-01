@@ -12,6 +12,7 @@ rsync-script/
 todo.md
 client/.parcel-cache/
 client/dist/
+CLAUDE.md
 
 # static file drafts
 dev-assets/

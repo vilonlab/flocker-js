@@ -23,6 +23,16 @@ export default class LobbyScene extends Phaser.Scene {
     }
 
     create() {
+        // If launched from the admin room list (?spectate=<roomId>&token=<token>), skip the normal
+        // lobby UI entirely and connect straight into that room as a read-only spectator.
+        const params = new URLSearchParams(window.location.search);
+        const spectateRoomId = params.get('spectate');
+
+        if (spectateRoomId) {
+            this.joinAsSpectator(spectateRoomId, params.get('token') ?? '');
+            return;
+        }
+
         // Add title text
         const titleText = this.add.text(
             config.game.width / 2,
@@ -112,5 +122,28 @@ export default class LobbyScene extends Phaser.Scene {
     runScene(key: string) {
         this.scene.start(key);
         this.scene.stop("lobby");
+    }
+
+    private async joinAsSpectator(roomId: string, token: string) {
+        try {
+            const client = new Colyseus.Client(BACKEND_URL);
+            const room = await client.joinById(roomId, { spectator: true, token });
+            this.scene.start('experiment', { room, spectator: true });
+            this.scene.stop('lobby');
+        } catch (error) {
+            console.error('Failed to join room as spectator:', error);
+            this.add.text(
+                config.game.width / 2,
+                config.game.height / 2,
+                'Unable to join room as spectator (link may have expired)',
+                {
+                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    fontSize: '20px',
+                    color: '#ff6b6b',
+                    align: 'center',
+                    wordWrap: { width: config.game.width - 80 },
+                }
+            ).setOrigin(0.5, 0.5);
+        }
     }
 }

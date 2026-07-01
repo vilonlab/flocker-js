@@ -37,6 +37,9 @@ export default class GameScene extends Phaser.Scene {
     scoreboardContainer: Phaser.GameObjects.Container;
     timerContainer: Phaser.GameObjects.Container;
     instructionContainer: Phaser.GameObjects.Container;
+    // True for admin spectators joined via LobbyScene's ?spectate= flow: no player entity exists for
+    // them server-side, so they never send move/emote/ready messages and see no ready-up UI.
+    isSpectator: boolean = false;
 
     constructor() {
         super({ key: "experiment" })
@@ -47,7 +50,9 @@ export default class GameScene extends Phaser.Scene {
         this.textureManager.preload();
     }
 
-    async create(data?: { room?: Colyseus.Room<RoomState> }) {
+    async create(data?: { room?: Colyseus.Room<RoomState>, spectator?: boolean }) {
+        this.isSpectator = data?.spectator ?? false;
+
         this.cursorKeys = this.input.keyboard!.createCursorKeys();
 
         // Create keys object that can recognize number keys 1-4
@@ -260,7 +265,7 @@ export default class GameScene extends Phaser.Scene {
         this.timerContainer.setDepth(100);
 
         // Create text elements with black color and stroke
-        this.nameText = this.add.text(0, 0, player ? player.name : 'Player', {
+        this.nameText = this.add.text(0, 0, this.isSpectator ? 'Spectating' : (player ? player.name : 'Player'), {
             color: '#000000',
             fontSize: '26px',
             fontStyle: 'bold'
@@ -315,53 +320,57 @@ export default class GameScene extends Phaser.Scene {
                 if (this.instructionContainer) {
                     this.instructionContainer.setVisible(false);
                 }
-                if (!this.readyButton) {
-                    this.readyButton = this.add
-                        .text(config.game.width / 2, 200, 'Ready', {
-                            fontSize: '32px',
-                            color: '#000000ff',
-                            backgroundColor: '#0717ff6e',
-                            padding: { x: 20, y: 10 }
-                        })
-                        .setOrigin(0.5)
-                        .setInteractive({ useHandCursor: true })
-                        .on('pointerdown', () => {
-                            const currentPlayer = this.getCurrentPlayer();
-                            if (currentPlayer && !currentPlayer.ready) {
-                                this.room.send('ready');
-                                this.readyButton.setText("Ready ✓");
-                                this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
-                            }
-                        })
-                        .setDepth(10)
-                        .setVisible(true);
-                } else {
-                    this.readyButton.setVisible(true);
-                }
 
-                if (!this.readyText) {
-                    this.readyText = this.add
-                        .text(config.game.width / 2, 100, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
-                            fontSize: '32px',
-                            color: '#000000ff',
-                            backgroundColor: '#0717ff6e',
-                            padding: { x: 20, y: 10 }
-                        })
-                        .setOrigin(0.5)
-                        .setDepth(10)
-                        .setVisible(true);
-                } else {
-                    this.readyText.setVisible(true);
-                }
+                // Spectators have no player entity and aren't required to ready up, so they never see this UI
+                if (!this.isSpectator) {
+                    if (!this.readyButton) {
+                        this.readyButton = this.add
+                            .text(config.game.width / 2, 200, 'Ready', {
+                                fontSize: '32px',
+                                color: '#000000ff',
+                                backgroundColor: '#0717ff6e',
+                                padding: { x: 20, y: 10 }
+                            })
+                            .setOrigin(0.5)
+                            .setInteractive({ useHandCursor: true })
+                            .on('pointerdown', () => {
+                                const currentPlayer = this.getCurrentPlayer();
+                                if (currentPlayer && !currentPlayer.ready) {
+                                    this.room.send('ready');
+                                    this.readyButton.setText("Ready ✓");
+                                    this.readyButton.setStyle({ backgroundColor: '#00ff006e'});
+                                }
+                            })
+                            .setDepth(10)
+                            .setVisible(true);
+                    } else {
+                        this.readyButton.setVisible(true);
+                    }
 
-                // Update ready count display
-                const readyCount = Array.from(this.room.state.players.values()).filter(p => p.ready).length;
-                const totalCount = this.room.state.players.size;
-                this.readyText.setText(`${readyCount}/${totalCount} ready`);
+                    if (!this.readyText) {
+                        this.readyText = this.add
+                            .text(config.game.width / 2, 100, `${Array.from(this.room.state.players.values()).filter(p => p.ready).length}/${this.room.state.players.size} ready`, {
+                                fontSize: '32px',
+                                color: '#000000ff',
+                                backgroundColor: '#0717ff6e',
+                                padding: { x: 20, y: 10 }
+                            })
+                            .setOrigin(0.5)
+                            .setDepth(10)
+                            .setVisible(true);
+                    } else {
+                        this.readyText.setVisible(true);
+                    }
 
-                if (currentPlayer && !currentPlayer.ready) {
-                    this.readyButton.setText('Ready');
-                    this.readyButton.setStyle({backgroundColor: '#0717ff6e'});
+                    // Update ready count display
+                    const readyCount = Array.from(this.room.state.players.values()).filter(p => p.ready).length;
+                    const totalCount = this.room.state.players.size;
+                    this.readyText.setText(`${readyCount}/${totalCount} ready`);
+
+                    if (currentPlayer && !currentPlayer.ready) {
+                        this.readyButton.setText('Ready');
+                        this.readyButton.setStyle({backgroundColor: '#0717ff6e'});
+                    }
                 }
                 // Hide scoreboard when transitioning to WAITING
                 if (this.scoreboardContainer) {
@@ -510,7 +519,7 @@ export default class GameScene extends Phaser.Scene {
             }
         }
 
-        if (dx !== 0 || dy !== 0) {
+        if (!this.isSpectator && (dx !== 0 || dy !== 0)) {
             console.log("Sending move message: x: ", dx * this.playerSpeed, ", y: ", dy * this.playerSpeed);
             this.room.send("move", { "x": dx * this.playerSpeed, "y": dy * this.playerSpeed });
         }
@@ -519,8 +528,8 @@ export default class GameScene extends Phaser.Scene {
         if (!this.room.state.players) {
             return;
         }
-        
-        if (emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
+
+        if (!this.isSpectator && emote !== "" && currentPlayer && emote !== currentPlayer.emote) {
             this.room.send("emote", { "emote": emote });
         }
 

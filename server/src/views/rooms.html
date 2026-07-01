@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Active Rooms - Flocker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .rooms-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .room-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .room-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .room-header {
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            word-break: break-all;
+        }
+
+        .room-body {
+            padding: 16px;
+        }
+
+        .room-data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .room-data-row:last-child {
+            border-bottom: none;
+        }
+
+        .room-data-label {
+            font-weight: 600;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .room-data-value {
+            color: #333;
+            font-size: 14px;
+        }
+
+        .spectate-btn {
+            display: block;
+            width: 100%;
+            margin-top: 16px;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .spectate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .no-rooms {
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            padding: 40px;
+        }
+
+        .error {
+            text-align: center;
+            color: #ff6b6b;
+            font-size: 16px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Active Rooms</h1>
+        <div class="subtitle">Join any room as a read-only spectator</div>
+    </div>
+
+    <div class="controls">
+        <button class="refresh-btn" onclick="fetchRooms()">Refresh</button>
+    </div>
+
+    <div id="roomsContainer" class="loading">Loading rooms...</div>
+
+    <script>
+        async function fetchRooms() {
+            const container = document.getElementById('roomsContainer');
+
+            try {
+                const response = await fetch('/flocker/admin/api/rooms');
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch rooms');
+                }
+
+                const data = await response.json();
+
+                container.innerHTML = '';
+
+                if (!data.rooms || data.rooms.length === 0) {
+                    container.className = 'no-rooms';
+                    container.innerHTML = '<p>No active rooms</p>';
+                    return;
+                }
+
+                container.className = 'rooms-container';
+                data.rooms.forEach((room) => {
+                    container.appendChild(createRoomCard(room));
+                });
+
+            } catch (error) {
+                console.error('Error fetching rooms:', error);
+                container.innerHTML = '<div class="error">Failed to load rooms. Please try again.</div>';
+            }
+        }
+
+        function createRoomCard(room) {
+            const card = document.createElement('div');
+            card.className = 'room-card';
+
+            const header = document.createElement('div');
+            header.className = 'room-header';
+            header.textContent = room.roomId;
+            card.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'room-body';
+
+            const dataFields = [
+                { label: 'Phase', value: room.phase ?? 'N/A' },
+                { label: 'Players', value: room.playerCount !== null ? room.playerCount : 'N/A' },
+                { label: 'Round', value: room.roundNumber !== null ? `${room.roundNumber}/${room.totalRounds}` : 'N/A' },
+                { label: 'Connections', value: `${room.clients}/${room.maxClients}` },
+            ];
+
+            dataFields.forEach((field) => {
+                const row = document.createElement('div');
+                row.className = 'room-data-row';
+
+                const label = document.createElement('span');
+                label.className = 'room-data-label';
+                label.textContent = field.label;
+
+                const value = document.createElement('span');
+                value.className = 'room-data-value';
+                value.textContent = field.value;
+
+                row.appendChild(label);
+                row.appendChild(value);
+                body.appendChild(row);
+            });
+
+            const spectateLink = document.createElement('a');
+            spectateLink.className = 'spectate-btn';
+            spectateLink.textContent = 'Join as Spectator';
+            spectateLink.target = '_blank';
+            spectateLink.rel = 'noopener';
+            spectateLink.href = `/flocker/?spectate=${encodeURIComponent(room.roomId)}&token=${encodeURIComponent(room.spectateToken)}`;
+            body.appendChild(spectateLink);
+
+            card.appendChild(body);
+            return card;
+        }
+
+        // Initial fetch, then refresh periodically. Each refresh mints fresh spectate tokens
+        // (they're short-lived and single-use), so old "Join as Spectator" links in a
+        // previously-rendered card become invalid once the list re-renders.
+        fetchRooms();
+        setInterval(fetchRooms, 5000);
+    </script>
+</body>
+</html>

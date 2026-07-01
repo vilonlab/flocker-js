@@ -2,6 +2,7 @@ import config from '@colyseus/tools';
 import {monitor} from '@colyseus/monitor';
 import {playground} from '@colyseus/playground';
 import type { Server } from '@colyseus/core';
+import { matchMaker } from 'colyseus';
 import { config as appConfig } from './config';
 import cookieParser from 'cookie-parser';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,6 +12,8 @@ import winston from "winston";
  * Import your Room files
  */
 import {ExperimentRoom} from './rooms/experimentRoom';
+import {Phase} from './rooms/schema/experimentSchema';
+import { mintSpectatorToken } from './spectatorTokens';
 import DataLogger from './dataLogger';
 import path from 'node:path';
 // Import { ExperimentRoom } from "/home/gus/Documents/Programming/flocker-js/server/src/rooms/experiment"
@@ -71,6 +74,43 @@ export default config({
          */
 		app.get('/admin', (req, res) => {
 			res.sendFile(path.join(__dirname, 'views', 'admin.html'));
+		});
+
+		/**
+         * Room list webpage -- lists active ExperimentRooms and lets an admin join one as a spectator
+         */
+		app.get('/admin/rooms', (req, res) => {
+			res.sendFile(path.join(__dirname, 'views', 'rooms.html'));
+		});
+
+		/**
+         * API endpoint listing active ExperimentRooms with live info, plus a freshly minted
+         * single-use spectator join token per room (see spectatorTokens.ts)
+         */
+		app.get('/admin/api/rooms', async (req, res) => {
+			try {
+				const cachedRooms = await matchMaker.query({ name: 'ExperimentRoom' });
+
+				const rooms = cachedRooms.map((cached) => {
+					const room = matchMaker.getLocalRoomById(cached.roomId) as ExperimentRoom | undefined;
+
+					return {
+						roomId: cached.roomId,
+						clients: cached.clients,
+						maxClients: cached.maxClients,
+						playerCount: room ? room.state.players.size : null,
+						phase: room ? Phase[room.state.phase] : null,
+						roundNumber: room ? room.state.roundNumber + 1 : null,
+						totalRounds: room ? room.state.totalRounds : null,
+						spectateToken: mintSpectatorToken(cached.roomId),
+					};
+				});
+
+				res.json({ rooms });
+			} catch (error) {
+				console.error('Error listing rooms:', error);
+				res.status(500).json({ error: 'Failed to list rooms' });
+			}
 		});
 
 	/**

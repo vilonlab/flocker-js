@@ -2,6 +2,7 @@ import {Room, type Client} from 'colyseus';
 import DataLogger from '../dataLogger';
 import {Player, Zone, RoomState, Phase} from './schema/experimentSchema';
 import {config} from '../config';
+import { consumeSpectatorToken } from '../spectatorTokens';
 import { randomInt } from 'node:crypto';
 import {generateDistinctColor, getContrastingTextColor} from '../utils';
 import { faker } from '@faker-js/faker';
@@ -13,7 +14,9 @@ import { ScoringStrategyConfig } from '../scoring/types';
 export class ExperimentRoom extends Room<RoomState> {
 	state = new RoomState();
 	logger = DataLogger.getInstance();
-    maxClients: number = config.game.maxClients;
+    // Bumped above the real player cap to leave room for admin spectators (see onAuth), which don't
+    // count against config.game.maxClients
+    maxClients: number = config.game.maxClients + config.game.maxSpectators;
 
 	private zoneHues = new Set<number>(); // Track hues used by zones
 	private playerHues = new Set<number>(); // Track hues used by players
@@ -41,8 +44,33 @@ export class ExperimentRoom extends Room<RoomState> {
         this.clock.start(); // Start room clock, used for async events
 	}
 
+	// Called before a client's WS connection is accepted into this specific room instance
+	onAuth(client: Client, options: any) {
+		if (options?.spectator) {
+			// Spectator joins are only ever initiated from the gated admin room list, which mints a
+			// token scoped to this room right before handing the client a join link -- this keeps
+			// the real trust boundary at the reverse-proxy auth gate (see spectatorTokens.ts) rather
+			// than trusting a client-supplied `{ spectator: true }` flag on the public WS endpoint.
+			if (typeof options.token !== 'string' || !consumeSpectatorToken(options.token, this.roomId)) {
+				throw new Error('Invalid or expired spectator token');
+			}
+			return true;
+		}
+
+		if (this.state.players.size >= config.game.maxClients) {
+			throw new Error('Room is full');
+		}
+
+		return true;
+	}
+
 	// Called every time a client joins
 	onJoin(client: Client, options: any) {
+		if (options?.spectator) {
+			console.log(client.sessionId, 'joined as spectator!');
+			return;
+		}
+
 		console.log(client.sessionId, 'joined!');
 
 		// Create new player with initialized properties
@@ -78,8 +106,12 @@ export class ExperimentRoom extends Room<RoomState> {
 		this.moveBudgets.set(client.sessionId, { budget: 0, lastUpdate: this.clock.currentTime });
 
 		if (this.state.phase === Phase.LOBBY &&
-			this.clients.length >= config.game.minClients) {
-			this.lock();
+			this.state.players.size >= config.game.minClients) {
+			// Use setPrivate rather than lock: it still excludes this room from joinOrCreate/join
+			// matchmaking (so new real players can't wander into an in-progress experiment), but
+			// unlike lock() it does not block joinById -- which admin spectators rely on to be able
+			// to watch a game that's already underway.
+			this.setPrivate(true);
 			this.transitionFromLobby();
 		}
 	}
@@ -434,7 +466,7 @@ export class ExperimentRoom extends Room<RoomState> {
             return;
         }
 
-        if (this.clients.length < config.game.minClients && (this.state.phase === Phase.WAITING || this.state.phase === Phase.LOBBY)) {
+        if (this.state.players.size < config.game.minClients && (this.state.phase === Phase.WAITING || this.state.phase === Phase.LOBBY)) {
             this.playerLock = true;
         }
         else {
