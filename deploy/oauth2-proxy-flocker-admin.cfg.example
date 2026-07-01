@@ -1,0 +1,34 @@
+# oauth2-proxy config for gating flocker's /flocker/app/admin/* endpoints.
+#
+# Copy this to the server (NOT into git) as e.g. ~/oauth2-proxy/flocker-admin.cfg,
+# fill in client_id / client_secret / cookie_secret, then run:
+#
+#   pm2 start ~/go/bin/oauth2-proxy --name oauth2-proxy -- --config=/home/gus/oauth2-proxy/flocker-admin.cfg
+#   pm2 save
+#
+# This instance is only ever reached by nginx's `auth_request` (see
+# deploy/nginx-flocker.conf), so it just needs to serve its own
+# /oauth2/{auth,sign_in,start,callback} endpoints on localhost.
+
+http_address = "127.0.0.1:4180"
+reverse_proxy = true
+
+provider = "github"
+github_org = "vilonlab"
+
+# From the GitHub OAuth App you registered:
+client_id = "REPLACE_ME"
+client_secret = "REPLACE_ME"
+
+# Generate with: python3 -c 'import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())'
+cookie_secret = "REPLACE_ME"
+cookie_secure = true
+cookie_domains = [".gusb.xyz"]
+
+email_domains = ["*"]
+redirect_url = "https://gusb.xyz/oauth2/callback"
+whitelist_domains = [".gusb.xyz"]
+
+# Not actually used to serve content (nginx handles the real proxying via
+# auth_request); this just satisfies oauth2-proxy's requirement for one.
+upstreams = ["static://202"]
