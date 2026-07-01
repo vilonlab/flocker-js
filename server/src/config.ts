@@ -40,6 +40,8 @@ export const config = {
     minHueDifference: 60, // for distinct player colors
     minHueDifferenceFallback: 30, // when running out of colors
     emoteTimeout: 2000, // timeout for emote in ms
+    maxSpeed: 120, // max movement speed, in pixels per second, enforced server-side regardless of message rate
+    speedBurstMs: 200, // ms worth of movement that can be "banked" while idle, to absorb frame/network jitter without allowing hoarding
   },
 
   // Color generation settings

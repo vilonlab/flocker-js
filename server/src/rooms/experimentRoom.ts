@@ -21,6 +21,9 @@ export class ExperimentRoom extends Room<RoomState> {
 	private roundDuration = config.round.duration; // Round duration in seconds
 	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
     private playerLock = true; // Prevent players from moving or using emotes
+	// Anti-cheat movement budget per player: caps total distance moved per unit of real time,
+	// independent of how many "move" messages a client sends
+	private moveBudgets = new Map<string, { budget: number; lastUpdate: number }>();
 	private lastRound = config.game.rounds;
 	private currentScoringStrategy: ScoringStrategyConfig = scoringStrategies.COLLECTIVE_ZONE_COUNT;
 
@@ -72,6 +75,7 @@ export class ExperimentRoom extends Room<RoomState> {
 		player.emote = '';
 
 		this.state.players.set(client.sessionId, player);
+		this.moveBudgets.set(client.sessionId, { budget: 0, lastUpdate: this.clock.currentTime });
 
 		if (this.state.phase === Phase.LOBBY &&
 			this.clients.length >= config.game.minClients) {
@@ -94,6 +98,39 @@ export class ExperimentRoom extends Room<RoomState> {
         this.checkPlayerCount();
 
 		this.state.players.delete(client.sessionId);
+		this.moveBudgets.delete(client.sessionId);
+	}
+
+	// Determine how much of a requested movement a player is actually allowed to make right now.
+	//
+	// Each player accrues a movement "budget" (in pixels) over real elapsed time at a fixed rate
+	// (config.player.maxSpeed px/sec), capped so idle players can't bank unlimited movement. A
+	// requested move is only ever scaled *down* toward the origin along its original direction, so
+	// the maximum reachable distance in any given time interval is a circle of radius == budget,
+	// not a per-axis square -- moving diagonally costs the same budget as moving straight.
+	private spendMovementBudget(sessionId: string, reqX: number, reqY: number): [number, number] {
+		const now = this.clock.currentTime;
+		const bucket = this.moveBudgets.get(sessionId) ?? { budget: 0, lastUpdate: now };
+
+		const elapsedSeconds = Math.max(0, now - bucket.lastUpdate) / 1000;
+		const maxBudget = config.player.maxSpeed * (config.player.speedBurstMs / 1000);
+		bucket.budget = Math.min(maxBudget, bucket.budget + config.player.maxSpeed * elapsedSeconds);
+		bucket.lastUpdate = now;
+
+		const requestedDistance = Math.hypot(reqX, reqY);
+		let moveX = reqX;
+		let moveY = reqY;
+
+		if (requestedDistance > bucket.budget) {
+			const scale = requestedDistance > 0 ? bucket.budget / requestedDistance : 0;
+			moveX = reqX * scale;
+			moveY = reqY * scale;
+		}
+
+		bucket.budget -= Math.hypot(moveX, moveY);
+		this.moveBudgets.set(sessionId, bucket);
+
+		return [moveX, moveY];
 	}
 
 	// Helper method to check player zone
@@ -355,8 +392,6 @@ export class ExperimentRoom extends Room<RoomState> {
 		// Called every time this room receives a "move" message
 		this.onMessage('move', (client, data) => {
 			const player = this.state.players.get(client.sessionId);
-			var adj_x = 0;
-			var adj_y = 0;
 
 			if (!player) {
 				console.error(`Player not found for session ${client.sessionId}`);
@@ -368,20 +403,20 @@ export class ExperimentRoom extends Room<RoomState> {
 				return;
 			}
 
-			if (data.x && data.y) {
-				adj_x = Math.round((data.x * Math.sqrt(2) / 2)*100) / 100;
-				adj_y = Math.round((data.y * Math.sqrt(2) / 2)*100) / 100;
-			} else {
-				adj_x = data.x;
-				adj_y = data.y;
+			// Reject malformed/non-finite input (also guards against NaN/Infinity slipping past distance checks)
+			const reqX = Number(data?.x);
+			const reqY = Number(data?.y);
+			if (!Number.isFinite(reqX) || !Number.isFinite(reqY)) {
+				return;
 			}
-			player.x += adj_x;
-			player.y += adj_y;
 
-			// console.log(client.sessionId + ' at, x: ' + player.x, 'y: ' + player.y);
+			const [moveX, moveY] = this.spendMovementBudget(client.sessionId, reqX, reqY);
 
-			// Add new distance to total player distance
-			player.distance += Math.abs(data.x) + Math.abs(data.y);
+			player.x += moveX;
+			player.y += moveY;
+
+			// Track actual (Euclidean) distance moved, not the raw requested delta
+			player.distance += Math.hypot(moveX, moveY);
 
 			// Clamp player position to world bounds (accounting for player radius)
 			const minX = player.radius;
