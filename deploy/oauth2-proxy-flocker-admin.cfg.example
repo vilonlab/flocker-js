@@ -26,11 +26,11 @@ client_secret = "REPLACE_ME"
 # Generate with: python3 -c 'import secrets,base64; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())'
 cookie_secret = "REPLACE_ME"
 cookie_secure = true
-cookie_domains = [".gusb.xyz"]
+cookie_domains = ["REPLACE_ME"]
 
 email_domains = ["*"]
-redirect_url = "https://gusb.xyz/oauth2/callback"
-whitelist_domains = [".gusb.xyz"]
+redirect_url = "REPLACE_ME"
+whitelist_domains = ["REPLACE_ME"]
 
 # Not actually used to serve content (nginx handles the real proxying via
 # auth_request); this just satisfies oauth2-proxy's requirement for one.

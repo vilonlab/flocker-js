@@ -1,6 +1,5 @@
 #!/bin/bash
 # Backs up the flocker sqlite database to Hetzner Object Storage.
-# Run daily via cron on gusb.xyz (not invoked by the deploy hook).
 #
 # One-time setup:
 #   1. Create a Hetzner Object Storage bucket + S3 access key/secret
@@ -10,7 +9,7 @@
 #   3. Set a 30-day expiration lifecycle rule on the bucket so old backups
 #      prune themselves (see notes in that same example file).
 #   4. Add to crontab (`crontab -e`):
-#        0 3 * * * /home/gus/flocker/deploy/backup-db >> /home/gus/flocker-backup.log 2>&1
+#        0 3 * * * ~/flocker/deploy/backup-db >> ~/flocker-backup.log 2>&1
 
 set -euo pipefail
 
