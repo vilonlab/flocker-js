@@ -9,15 +9,15 @@
 #      this block directly to ~/.config/rclone/rclone.conf with the real
 #      values filled in.
 #   3. Create the bucket if you haven't already via the console, or:
-#        rclone mkdir hetzner:flocker-db-backups
+#        rclone mkdir hetzner:flocker-backup
 #   4. Set a 30-day expiration lifecycle rule on the bucket so backups
 #      prune themselves automatically. Easiest via the Hetzner console's
 #      bucket lifecycle settings if available; otherwise via the S3 API
 #      with aws-cli pointed at the Hetzner endpoint, e.g.:
 #
 #        aws s3api put-bucket-lifecycle-configuration \
-#          --endpoint-url https://fsn1.your-objectstorage.com \
-#          --bucket flocker-db-backups \
+#          --endpoint-url https://hel1.your-objectstorage.com \
+#          --bucket flocker-backup \
 #          --lifecycle-configuration '{
 #            "Rules": [{
 #              "ID": "expire-old-backups",
@@ -32,5 +32,5 @@ type = s3
 provider = Other
 access_key_id = REPLACE_ME
 secret_access_key = REPLACE_ME
-endpoint = https://fsn1.your-objectstorage.com
-region = fsn1
+endpoint = https://hel1.your-objectstorage.com
+region = hel1

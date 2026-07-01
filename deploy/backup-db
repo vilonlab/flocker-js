@@ -15,7 +15,7 @@
 set -euo pipefail
 
 DB_PATH="$HOME/flocker/server/data/flocker.db"
-REMOTE="hetzner:flocker-db-backups"
+REMOTE="hetzner:flocker-backup"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 TMP_DIR="$(mktemp -d)"
 BACKUP_FILE="$TMP_DIR/flocker-$TIMESTAMP.db"
