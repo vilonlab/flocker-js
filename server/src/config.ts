@@ -17,7 +17,8 @@ export const config = {
     timerInterval: 1000, // ms - how often to update timer
     roundPoints: 1, // points earned if in target zone
     scoreboardDuration: 5000, // ms - how long to show scoreboard
-    readyTimeout: 10000, // time to wait for all players to ready at start of round, in ms
+    readyTimeout: 10000, // time to wait for all players to ready before round 1, in ms
+    countdownDuration: 10, // seconds - fixed delay before rounds after the first begin (no ready-up)
   },
 
   // Zone settings

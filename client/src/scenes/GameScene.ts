@@ -31,6 +31,7 @@ export default class GameScene extends Phaser.Scene {
     uiContainer: Phaser.GameObjects.Container;
     readyButton: Phaser.GameObjects.Text;
     readyText: Phaser.GameObjects.Text;
+    countdownText: Phaser.GameObjects.Text;
     scoreText: Phaser.GameObjects.Text;
     scoreboardContainer: Phaser.GameObjects.Container;
     timerContainer: Phaser.GameObjects.Container;
@@ -214,10 +215,6 @@ export default class GameScene extends Phaser.Scene {
         const player = this.getCurrentPlayer();
 
         // Create timer UI
-        const roundTimer = this.add.image(0, 0, 'round-timer');
-        roundTimer.setScale(0.2);
-        roundTimer.setDepth(2);
-
         this.timerText = this.add.text(0, 0, '00:00', {
             color: '#ff9100ff',
             font: "VT323",
@@ -227,7 +224,7 @@ export default class GameScene extends Phaser.Scene {
         this.timerContainer = this.add.container(
             config.game.width - 100,
             0,
-            [roundTimer, this.timerText]
+            [this.timerText]
         );
 
         this.timerText.setOrigin(0.5, 0);
@@ -342,6 +339,34 @@ export default class GameScene extends Phaser.Scene {
                 if (this.scoreboardContainer) {
                     this.scoreboardContainer.setVisible(false);
                 }
+            } else if (value === Phase.COUNTDOWN) {
+                if (this.instructionContainer) {
+                    this.instructionContainer.setVisible(false);
+                }
+                if (this.scoreboardContainer) {
+                    this.scoreboardContainer.setVisible(false);
+                }
+                if (this.readyButton) {
+                    this.readyButton.setVisible(false);
+                }
+                if (this.readyText) {
+                    this.readyText.setVisible(false);
+                }
+
+                if (!this.countdownText) {
+                    this.countdownText = this.add
+                        .text(config.game.width / 2, 200, `Round starts in ${this.room.state.countdownTime}s`, {
+                            fontSize: '32px',
+                            color: '#000000ff',
+                            backgroundColor: '#0717ff6e',
+                            padding: { x: 20, y: 10 }
+                        })
+                        .setOrigin(0.5)
+                        .setDepth(10)
+                        .setVisible(true);
+                } else {
+                    this.countdownText.setVisible(true);
+                }
             } else if (value === Phase.SCOREBOARD) {
                 // Show scoreboard when phase becomes SCOREBOARD
                 this.showScoreboard();
@@ -359,6 +384,9 @@ export default class GameScene extends Phaser.Scene {
                 }
                 if (this.readyButton) {
                     this.readyButton.setVisible(false);
+                }
+                if (this.countdownText) {
+                    this.countdownText.setVisible(false);
                 }
                 if (this.instructionContainer) {
                     this.instructionContainer.setVisible(false);
@@ -486,6 +514,10 @@ export default class GameScene extends Phaser.Scene {
         }
 
         this.timerText.text = this.room.state.roundTime > 9 ? "00:" + this.room.state.roundTime : "00:0" + this.room.state.roundTime;
+
+        if (this.countdownText) {
+            this.countdownText.text = `Round starts in ${this.room.state.countdownTime}s`;
+        }
     }
 
     private generateDebugText(params: {

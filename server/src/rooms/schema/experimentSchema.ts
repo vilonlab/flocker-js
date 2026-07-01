@@ -8,6 +8,7 @@ enum Phase {
 	LOBBY,
 	END,
 	INSTRUCTION,
+	COUNTDOWN,
 }
 
 class Player extends Schema {
@@ -40,6 +41,7 @@ class Zone extends Schema {
 class RoomState extends Schema {
 	@type({map: Player}) players = new MapSchema<Player>();
 	@type('number') roundTime = 0;
+	@type('number') countdownTime = 0;
 	@type({map: Zone}) zones = new MapSchema<Zone>();
     @type('number') targetZone = -1;
     @type(Phase) phase = Phase.ACTIVE;

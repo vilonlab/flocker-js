@@ -305,16 +305,10 @@ export class ExperimentRoom extends Room<RoomState> {
         // Select aware players
         this.selectAware();
 
+        // Rounds after the first start on a fixed countdown rather than waiting for players to ready up
+        this.startRoundCountdown();
 
-
-
-		this.state.phase = Phase.WAITING;
-		console.log(`Current phase: ${this.state.phase}`);
-
-        // Wait for all players to be ready
-        this.waitForPlayerReady();
-
-        // Start round and timer 
+        // Start round and timer
         this.startRoundTimer();
 
 		// Set new target zone
@@ -362,6 +356,24 @@ export class ExperimentRoom extends Room<RoomState> {
         });
         this.playerLock = false;
         this.state.phase = Phase.ACTIVE;
+    }
+
+    // Start a fixed countdown before rounds after the first begin (no ready-up required)
+    private startRoundCountdown() {
+        this.state.phase = Phase.COUNTDOWN;
+        this.state.countdownTime = config.round.countdownDuration;
+        console.log(`Current phase: ${this.state.phase}`);
+
+        const countdownInterval = this.clock.setInterval(() => {
+            this.state.countdownTime -= 1;
+
+            if (this.state.countdownTime <= 0) {
+                countdownInterval.clear();
+                this.playerLock = false;
+                this.state.phase = Phase.ACTIVE;
+                console.log(`Current phase: ${this.state.phase}`);
+            }
+        }, 1000);
     }
 
     private checkPlayerCount() {
@@ -416,7 +428,7 @@ export class ExperimentRoom extends Room<RoomState> {
 			player.y += moveY;
 
 			// Track actual (Euclidean) distance moved, not the raw requested delta
-			player.distance += Math.hypot(moveX, moveY);
+			player.distance += Math.trunc(Math.hypot(moveX, moveY));
 
 			// Clamp player position to world bounds (accounting for player radius)
 			const minX = player.radius;

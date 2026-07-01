@@ -36,7 +36,6 @@ export class TextureManager {
             'player': base_url + 'player.png',
             'player-color': base_url + 'player-color.png',
             'background': base_url + 'background.png',
-            'round-timer': base_url + 'round-timer.png',
             'zone': base_url + 'zone.png',
             'zone-center': base_url + 'zone-center.png',
             'instruction': base_url + 'instruction.png',
