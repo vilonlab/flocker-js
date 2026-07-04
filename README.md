@@ -1,125 +1,110 @@
 # Flocker
 
-This project implements an online multiplayer experiment using **Phaser.js** (frontend) and **Colyseus** (Node.js backend framework) for real-time communication and state management.
+An online multiplayer experiment built with **Phaser 3** (client) and **Colyseus** (Node.js/TypeScript server) for real-time communication and state management. Players move around a shared arena, try to reach a target zone, and emote at each other, while the server logs round-by-round state to SQLite for later analysis.
 
 ## Project Structure
 
 ```
-/collective-decision-experiment-colyseus/
-├── client/                 # Phaser frontend code (served by Node.js)
-│   ├── index.html          # Main HTML file (Colyseus client, UI)
-│   ├── main.js             # Phaser initialization
-│   ├── assets/             # Images, spritesheets
+flocker-js/
+├── client/                    # Phaser front end, built with Parcel
+│   ├── index.html
 │   └── src/
-│       └── scenes/         # Phaser scenes (PreloadScene, GameScene)
+│       ├── main.ts            # Phaser game bootstrap
+│       ├── backend.ts         # Colyseus client connection
+│       ├── config.ts          # Client-side tuning constants
+│       ├── TextureManager.ts  # Loads swappable asset "packs"
+│       ├── scenes/
+│       │   ├── MMScene.ts     # Matchmaking / connecting screen
+│       │   ├── LobbyScene.ts  # Pre-round lobby
+│       │   ├── GameScene.ts   # Main gameplay (movement, zones, emotes, spectator view)
+│       │   └── EndScene.ts    # Post-experiment summary
+│       └── assets/
+│           └── packs/         # Texture packs (default, space, ...)
 │
-├── server/                 # Node.js backend code (Colyseus)
-│   ├── index.js            # Main server entry point (sets up Colyseus)
-│   ├── rooms/              # Colyseus room logic
-│   │   ├── ExperimentRoom.js # Main game/lobby/round logic room
-│   │   └── schema/         # Colyseus state schemas
-│   │       └── ExperimentRoomState.js # State definitions
-│   ├── dataLogger.js       # Data saving utility
-│   └── utils.js            # Helper functions
+├── server/                    # Colyseus server
+│   └── src/
+│       ├── index.ts           # Server entry point
+│       ├── app.config.ts      # Express routes, admin API, Colyseus wiring
+│       ├── config.ts          # Server-side game/round/scoring tuning
+│       ├── rooms/
+│       │   ├── experimentRoom.ts       # Core room: lobby, rounds, scoring, spectators
+│       │   └── schema/experimentSchema.ts
+│       ├── scoring/            # Pluggable scoring strategies
+│       ├── spectatorTokens.ts  # Short-lived tokens gating admin spectator joins
+│       ├── dataLogger.ts       # Batched SQLite (better-sqlite3) snapshot logging
+│       └── views/              # Static admin pages (rooms list, data export, clients display)
 │
-├── .gitignore              # Git ignore file
-├── package.json            # Dependencies (Node.js, Colyseus, Phaser)
-├── package-lock.json       # Exact dependency versions
-├── Procfile                # Railway process definition
-└── README.md               # This file
+├── deploy/                     # Deployment templates (nginx, oauth2-proxy, pm2, backups)
+└── README.md
 ```
 
 ## Features
 
-* Real-time multiplayer interaction via WebSockets managed by **Colyseus**.
-* **Colyseus Room** (`ExperimentRoom`) handling game logic, player connections, lobby management, instructions phase, round progression, roles, and scoring.
-* **Colyseus State Synchronization** using schema (`ExperimentRoomState`) to automatically keep clients updated on game state (phase, players, positions, emotes, scores, etc.).
-* Phaser.js client for rendering the game arena, players, zones, and emotes, reacting to state changes.
-* Lobby system with player list and optional readiness checks.
-* Instructions phase before rounds begin.
-* Players move by clicking, emote using keys 1-4.
-* Round-based structure with varying numbers of "informed" players per round.
-* Data logging (player positions, emotes, roles, zone entry) round-by-round to a persistent sqlite3 database.
-* Optional Colyseus Monitor for debugging server state (if enabled in `server/index.js`).
-* Basic admin controls (start experiment) available to the first player joining the room.
+* Real-time multiplayer via **Colyseus** rooms and schema-based state sync.
+* Round-based gameplay: players move with arrow keys, emote with keys 1-4, and try to reach the correct target zone before the round timer runs out.
+* A configurable proportion of "aware" players per round which can grow over rounds or be re-randomized each round.
+* Pluggable scoring strategies with player-facing descriptions of the current scoring rule.
+* Matchmaking lobby that waits for a minimum number of players, followed by an instructions phase and round countdowns.
+* Player collision and speech-bubble emote rendering, with distinct per-player colors and names.
+* **Admin spectator mode**: an admin room-list page (`/admin/rooms`) shows in-progress rooms and lets an admin join any of them as a read-only spectator.
+* Additional admin pages for viewing currently connected clients and exporting logged data as CSV.
+* Snapshot-based data logging to SQLite (batched/queued writes).
 
-## Setup
+## Database Schema & Experiment Data
 
-1.  **Prerequisites:**
-    * Node.js (version specified in `package.json`, e.g., v18 or later)
-    * npm (usually comes with Node.js)
-    * Git
+The server persists to a SQLite database at `server/data/flocker.db` (WAL mode, via `better-sqlite3`), managed by the `DataLogger` singleton in `server/src/dataLogger.ts`. All rooms share one connection; snapshots are queued in memory and flushed in a single batch transaction every 50 snapshots or every 1 second, whichever comes first.
 
-2.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-url>
-    cd flocker-js
-    ```
+### `snapshots` table
 
-3.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-    *(This installs Express, Colyseus, Phaser (via CDN in client), and other necessary packages listed in `package.json`)*
+This is the primary output of an experiment: one row per captured game-state snapshot. Rows are only logged while a room's phase is `ACTIVE`, both on a fixed timer (`config.logging.snapshotInterval`, default every 100ms) and once more right before each state patch is broadcast to clients (~20/sec), so density varies a bit depending on how active a round is.
 
-## Running Locally
+| Column | Type | Description |
+|---|---|---|
+| `id` | INTEGER PK | Autoincrement row id |
+| `timestamp` | INTEGER | Colyseus simulation clock time (ms) at capture |
+| `server_time` | INTEGER | Real-world `Date.now()` at capture |
+| `room_id` | TEXT | Colyseus room id |
+| `phase` | TEXT | Room phase at capture (see enum below), may be `NULL` |
+| `target_zone` | TEXT | The round's correct zone id, may be `NULL` |
+| `players` | JSON | Array of per-player state at capture time (see below) |
+| `created_at` | DATETIME | SQLite insert time |
 
-1.  **Start the server:**
-    ```bash
-    npm start
-    ```
-    * Or use `npm run dev` if you installed `nodemon` for auto-reloading during development.
+Each entry in the `players` JSON array:
 
-2.  **Access the experiment:**
-    * Open your web browser and navigate to `http://localhost:3000` (or the port specified in the console).
+* `id` — Colyseus `sessionId`
+* `x`, `y` — position (rounded to the nearest pixel on patch-triggered snapshots)
+* `aware` — whether the player currently knows the correct target zone
+* `name`, `color`, `textColor` — display identity
+* `emote` — currently active emote symbol, or empty string
+* `zone` — id of the zone the player is currently standing in, or `-1`
+* `points` — player's cumulative score
+* `ready` — lobby ready-up state
 
-3.  **Colyseus Monitor (Optional):**
-    * If enabled in `server/index.js` (usually default for non-production), access the monitor at `http://localhost:3000/colyseus` to inspect rooms and state.
+Phase enum values (`server/src/rooms/schema/experimentSchema.ts`): `ACTIVE`, `WAITING`, `SCOREBOARD`, `LOBBY`, `END`, `INSTRUCTION`, `COUNTDOWN`.
 
-4.  **Interact:**
-    * Open multiple browser tabs/windows to simulate multiple players joining the Colyseus room.
-    * Follow the on-screen prompts (Lobby -> Instructions -> Gameplay).
-    * Use the "Ready" button in the lobby (if implemented/required).
-    * The **first player** to join typically has admin controls (bottom-left) to "Start Experiment" when in the lobby phase.
-    * Click to move your player during active rounds.
-    * Press keys 1-4 to emote.
+Note: rows don't store a round number directly, so round boundaries need to be reconstructed from `target_zone` changes and phase transitions in the snapshot stream for a given `room_id`.
 
-5.  **Data:**
-    * During rounds, data will be logged to `data/flocker.db`.
+### `player_data` table
 
-## Data Format (`experiment_data_colyseus.jsonl`)
+Also defined in the schema (`id`, `name`, `color`, `text_color`, `points`, `last_connection`), intended to track a player across reconnects, but its write path (`updatePlayerData`) is currently commented out in `dataLogger.ts` — this table is not populated in the current build.
 
-Data is saved in JSON Lines format. Each line is a valid JSON object representing a recorded event or state snapshot. Example entries:
-```json
-{"eventType":"session_start","timestamp":1712964000000}
-{"timestamp":1712964061500,"round":1,"playerId":"clientSessionId1","role":"informed","x":410,"y":305,"emote":null,"targetX":650,"targetY":300,"isInTargetZone":false,"currentZone":null,"isFinalState":false}
-{"timestamp":1712964062000,"round":1,"playerId":"clientSessionId2","role":"uninformed","x":400,"y":300,"emote":"?","eventType":"emote"}
-{"timestamp":1712964062500,"round":1,"playerId":"clientSessionId1","role":"informed","x":425,"y":303,"emote":null,"targetX":650,"targetY":300,"isInTargetZone":false,"currentZone":null,"isFinalState":false}
-{"timestamp":1712964120000,"round":1,"playerId":"clientSessionId1","role":"informed","x":648,"y":301,"emote":null,"targetX":null,"targetY":null,"isInTargetZone":true,"currentZone":"Right","isFinalState":true}
-{"timestamp":1712964120000,"round":1,"playerId":"clientSessionId2","role":"uninformed","x":510,"y":280,"emote":null,"targetX":null,"targetY":null,"isInTargetZone":false,"currentZone":null,"isFinalState":true}
-```
+### Exporting data
 
-*(Note: Timestamps are examples)*
+The admin data-extraction page (`/admin/data`, backed by `GET /admin/api/data`) queries `snapshots` filtered by an optional date range and downloads the results as CSV, with the `players` column flattened to a JSON string per row.
 
-Fields include:
-* `timestamp`: Milliseconds since epoch (from Colyseus clock).
-* `round`: Current round number.
-* `playerId`: Colyseus client `sessionId`.
-* `role`: 'informed' or 'uninformed'.
-* `x`, `y`: Player's position (requires client to send updates for accuracy).
-* `emote`: Currently displayed emote symbol (or `null`).
-* `targetX`, `targetY`: The player's current movement target (or `null`).
-* `isInTargetZone`: Boolean, true if player is inside the *correct* zone for the round.
-* `currentZone`: The key ('Top', 'Right', 'Bottom', 'Left') of the zone the player is currently in (or `null`).
-* `isFinalState`: Boolean, true if this log entry represents the state at the very end of the round.
-* `emoteAction`: Present when an emote key is pressed, logs the specific emote triggered.
-* `eventType`: Can indicate special events like 'session_start' or 'emote'.
+## Installation
 
-## Notes & Considerations
+1. Clone the repository.
+2. Install server dependencies:
+   ```bash
+   cd server
+   npm install
+   ```
+3. Install client dependencies:
+   ```bash
+   cd ../client
+   npm install
+   ```
+It is recommended to use nginx as a web server/proxy, pm2 to manage the backend Node process, and oauth2-proxy to manage gated administrator pages. Deployment templates are included in the repository in the `deploy/` directory.
 
-* **Colyseus vs. Socket.IO:** Colyseus provides higher-level abstractions for room management and state synchronization compared to raw Socket.IO, simplifying server logic but introducing its own framework concepts.
-* **Server Authority:** For accurate logging and scoring, the server (`ExperimentRoom.js`) needs reliable player position data (`player.x`, `player.y`). The current client implementation sends movement *intent* (`playerMovement`). For higher accuracy, the client *must* send frequent position updates (`positionUpdate` message, needs handler added in `ExperimentRoom.js`) while moving, and the server should update its state accordingly.
-* **Scalability:** Colyseus is designed for scalability, but the specific limits depend on server resources and the complexity of the room logic/state.
-* **Error Handling:** Robust error handling (network issues, server restarts, invalid messages) is recommended for production experiments.
-* **Security:** Admin controls are basic (first player). Real experiments might need more robust authorization. Input validation should be thorough.
-```
+*(Detailed run/build/deploy instructions to come.)*
