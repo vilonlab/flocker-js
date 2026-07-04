@@ -106,8 +106,8 @@ export default class EndScene extends Phaser.Scene {
             color: '#000000',
             fontStyle: 'bold'
         });
-        title.setOrigin(0.5);
-        this.scoreboardContainer.add(title);
+        room_id.setOrigin(0.5);
+        this.scoreboardContainer.add(room_id);
 
 
         // Create player rows
