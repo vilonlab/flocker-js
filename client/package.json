@@ -1,0 +1,23 @@
+{
+  "name": "phaser-minimal-demo",
+  "version": "1.0.0",
+  "description": "Minimal Phaser demo with Colyseus integration",
+  "scripts": {
+    "start": "parcel index.html",
+    "build": "parcel build index.html --public-url /flocker/ && npm run load_assets",
+    "load_assets": "cp -r ./src/assets ./dist/."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "buffer": "^6.0.3",
+    "parcel": "^2.16.0",
+    "process": "^0.11.10",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "colyseus.js": "^0.16.22",
+    "phaser": "^3.90.0"
+  }
+}

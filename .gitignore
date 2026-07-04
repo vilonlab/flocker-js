@@ -1,5 +1,42 @@
+# deploy scripts
+scp_to_server.sh
+filelist.txt
+rsync-exclude.txt
+pi*
+*.sh
+rsync-*
+CODE_STRUCTURE_SUGGESTIONS.md
+notes.md
+CONFIG_ARCHITECTURE.md
+rsync-script/
+todo.md
+client/.parcel-cache/
+client/dist/
+CLAUDE.md
+
+# static file drafts
+dev-assets/
+
+# local notes
+*.md
+
+# Databases
+*.db*
+data/
+
+# Parcel 
+.parcel-cache
+dist
+
+# Examples
+examples/
+
 # Node.js dependencies
 node_modules/
+*-lock*
+
+# Shhhhhh
+*.claude/
 
 # Logs
 logs/
@@ -115,3 +152,5 @@ ehthumbs_vista.db
 # # Or specify output directory:
 # dist/
 # build/
+run-local
+

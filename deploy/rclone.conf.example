@@ -1,0 +1,36 @@
+# Example rclone remote for Hetzner Object Storage. Real credentials go in
+# ~/.config/rclone/rclone.conf on the server -- NOT in git.
+#
+# Setup:
+#   1. Hetzner Cloud Console -> Object Storage -> create a bucket (note the
+#      region, e.g. fsn1/nbg1/hel1) and generate an S3 access key + secret.
+#   2. Either run `rclone config` interactively and follow the prompts
+#      (type = s3, provider = Other, fill in the values below), or append
+#      this block directly to ~/.config/rclone/rclone.conf with the real
+#      values filled in.
+#   3. Create the bucket if you haven't already via the console, or:
+#        rclone mkdir hetzner:flocker-backup
+#   4. Set a 30-day expiration lifecycle rule on the bucket so backups
+#      prune themselves automatically. Easiest via the Hetzner console's
+#      bucket lifecycle settings if available; otherwise via the S3 API
+#      with aws-cli pointed at the Hetzner endpoint, e.g.:
+#
+#        aws s3api put-bucket-lifecycle-configuration \
+#          --endpoint-url https://hel1.your-objectstorage.com \
+#          --bucket flocker-backup \
+#          --lifecycle-configuration '{
+#            "Rules": [{
+#              "ID": "expire-old-backups",
+#              "Status": "Enabled",
+#              "Filter": {},
+#              "Expiration": { "Days": 30 }
+#            }]
+#          }'
+
+[hetzner]
+type = s3
+provider = Other
+access_key_id = REPLACE_ME
+secret_access_key = REPLACE_ME
+endpoint = REPLACE_ME # Example: https://hel1.your-objectstorage.com
+region = REPLACE_ME # Example: hel1

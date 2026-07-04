@@ -1,0 +1,698 @@
+import {Room, type Client} from 'colyseus';
+import DataLogger from '../dataLogger';
+import {Player, Zone, RoomState, Phase} from './schema/experimentSchema';
+import {config} from '../config';
+import { consumeSpectatorToken } from '../spectatorTokens';
+import { randomInt } from 'node:crypto';
+import {generateDistinctColor, getContrastingTextColor} from '../utils';
+import { faker } from '@faker-js/faker';
+import { kMaxLength } from 'node:buffer';
+import { ad } from '@faker-js/faker/dist/airline-DF6RqYmq';
+import { scoringStrategies } from '../scoring/scoringStrategies';
+import { ScoringStrategyConfig } from '../scoring/types';
+
+export class ExperimentRoom extends Room<RoomState> {
+	state = new RoomState();
+	logger = DataLogger.getInstance();
+    // Bumped above the real player cap to leave room for admin spectators (see onAuth), which don't
+    // count against config.game.maxClients
+    maxClients: number = config.game.maxClients + config.game.maxSpectators;
+
+	private zoneHues = new Set<number>(); // Track hues used by zones
+	private playerHues = new Set<number>(); // Track hues used by players
+	private roundTimer: any = null; // Track the round timer interval
+	private roundDuration = config.round.duration; // Round duration in seconds
+	private emoteTimeouts = new Map<string, any>(); // Track emote timeouts per player
+    private playerLock = true; // Prevent players from moving or using emotes
+	// Anti-cheat movement budget per player: caps total distance moved per unit of real time,
+	// independent of how many "move" messages a client sends
+	private moveBudgets = new Map<string, { budget: number; lastUpdate: number }>();
+	private lastRound = config.game.rounds;
+	private currentScoringStrategy: ScoringStrategyConfig = scoringStrategies.COLLECTIVE_ZONE_COUNT;
+
+	// Called when first player connects
+	onCreate(options: any) {
+		console.log('ExperimentRoom created!', options);
+
+		this.registerMessageListeners(); // Register onMessage listeners 
+		this.initializeZones(); // Create zones
+		this.state.phase = Phase.LOBBY; // Set initial phase
+
+		this.state.isCollectiveScoring = this.currentScoringStrategy.isCollective;
+		this.state.instructionText = this.currentScoringStrategy.objective;
+	
+        this.clock.start(); // Start room clock, used for async events
+	}
+
+	// Called before a client's WS connection is accepted into this specific room instance
+	onAuth(client: Client, options: any) {
+		if (options?.spectator) {
+			// Spectator joins are only ever initiated from the gated admin room list, which mints a
+			// token scoped to this room right before handing the client a join link -- this keeps
+			// the real trust boundary at the reverse-proxy auth gate (see spectatorTokens.ts) rather
+			// than trusting a client-supplied `{ spectator: true }` flag on the public WS endpoint.
+			if (typeof options.token !== 'string' || !consumeSpectatorToken(options.token, this.roomId)) {
+				throw new Error('Invalid or expired spectator token');
+			}
+			return true;
+		}
+
+		if (this.state.players.size >= config.game.maxClients) {
+			throw new Error('Room is full');
+		}
+
+		return true;
+	}
+
+	// Called every time a client joins
+	onJoin(client: Client, options: any) {
+		if (options?.spectator) {
+			console.log(client.sessionId, 'joined as spectator!');
+			return;
+		}
+
+		console.log(client.sessionId, 'joined!');
+
+		// Create new player with initialized properties
+		const player = new Player();
+		player.x = config.player.startX; // Start at center
+		player.y = config.player.startY;
+		// player.name = options.name || `Player ${client.sessionId.slice(0, 4)}`;
+		const adjective = faker.word.adjective({ length: { min: 5, max: 7 }, strategy: "closest" });
+		const noun = faker.word.noun({ length: { min: 5, max: 7 }, strategy: "closest" });
+		// Capitalize first letter of each word
+		const capitalizedAdjective = adjective.charAt(0).toUpperCase() + adjective.slice(1);
+		const capitalizedNoun = noun.charAt(0).toUpperCase() + noun.slice(1);
+		player.name = `${capitalizedAdjective}${capitalizedNoun}`;		
+
+		// Combine zone and player hues to ensure player colors are distinct from both zones and other players
+		const allUsedHues = new Set([...this.zoneHues, ...this.playerHues]);
+		player.color = generateDistinctColor(allUsedHues, config.player.minHueDifference);
+
+		// The new hue was added to allUsedHues, so we need to find it and add to playerHues
+		// by comparing the sets
+		for (const hue of allUsedHues) {
+			if (!this.zoneHues.has(hue) && !this.playerHues.has(hue)) {
+				this.playerHues.add(hue);
+				break;
+			}
+		}
+
+		// Generate contrasting text color for readability
+		player.textColor = getContrastingTextColor(player.color);
+		player.emote = '';
+
+		this.state.players.set(client.sessionId, player);
+		this.moveBudgets.set(client.sessionId, { budget: 0, lastUpdate: this.clock.currentTime });
+
+		if (this.state.phase === Phase.LOBBY &&
+			this.state.players.size >= config.game.minClients) {
+			// Use setPrivate rather than lock: it still excludes this room from joinOrCreate/join
+			// matchmaking (so new real players can't wander into an in-progress experiment), but
+			// unlike lock() it does not block joinById -- which admin spectators rely on to be able
+			// to watch a game that's already underway.
+			this.setPrivate(true);
+			this.transitionFromLobby();
+		}
+	}
+
+	// Called when a client leaves
+	onLeave(client: Client, _consented: boolean) {
+		console.log(client.sessionId, 'left!');
+
+		// Clear any active emote timeout for this player
+		const emoteTimeout = this.emoteTimeouts.get(client.sessionId);
+		if (emoteTimeout) {
+			emoteTimeout.clear();
+			this.emoteTimeouts.delete(client.sessionId);
+		}
+
+        this.checkPlayerCount();
+
+		this.state.players.delete(client.sessionId);
+		this.moveBudgets.delete(client.sessionId);
+	}
+
+	// Determine how much of a requested movement a player is actually allowed to make right now.
+	//
+	// Each player accrues a movement "budget" (in pixels) over real elapsed time at a fixed rate
+	// (config.player.maxSpeed px/sec), capped so idle players can't bank unlimited movement. A
+	// requested move is only ever scaled *down* toward the origin along its original direction, so
+	// the maximum reachable distance in any given time interval is a circle of radius == budget,
+	// not a per-axis square -- moving diagonally costs the same budget as moving straight.
+	private spendMovementBudget(sessionId: string, reqX: number, reqY: number): [number, number] {
+		const now = this.clock.currentTime;
+		const bucket = this.moveBudgets.get(sessionId) ?? { budget: 0, lastUpdate: now };
+
+		const elapsedSeconds = Math.max(0, now - bucket.lastUpdate) / 1000;
+		const maxBudget = config.player.maxSpeed * (config.player.speedBurstMs / 1000);
+		bucket.budget = Math.min(maxBudget, bucket.budget + config.player.maxSpeed * elapsedSeconds);
+		bucket.lastUpdate = now;
+
+		const requestedDistance = Math.hypot(reqX, reqY);
+		let moveX = reqX;
+		let moveY = reqY;
+
+		if (requestedDistance > bucket.budget) {
+			const scale = requestedDistance > 0 ? bucket.budget / requestedDistance : 0;
+			moveX = reqX * scale;
+			moveY = reqY * scale;
+		}
+
+		bucket.budget -= Math.hypot(moveX, moveY);
+		this.moveBudgets.set(sessionId, bucket);
+
+		return [moveX, moveY];
+	}
+
+	// Push `player` out of any other player whose circle it now overlaps, so players can never
+	// stack on top of each other. Only `player`'s position is adjusted -- the other player(s)
+	// involved are left where they are, since each "move" message only has authority to move the
+	// player who sent it.
+	private resolvePlayerOverlap(player: Player, sessionId: string) {
+		this.state.players.forEach((other, otherSessionId) => {
+			if (otherSessionId === sessionId) {
+				return;
+			}
+
+			const dx = player.x - other.x;
+			const dy = player.y - other.y;
+			const minDist = player.radius + other.radius;
+			const dist = Math.hypot(dx, dy);
+
+			if (dist >= minDist) {
+				return;
+			}
+
+			const overlap = minDist - dist;
+
+			if (dist > 0) {
+				player.x += (dx / dist) * overlap;
+				player.y += (dy / dist) * overlap;
+			} else {
+				// Exactly coincident (e.g. simultaneous spawn) -- push along a fixed axis to avoid a divide-by-zero
+				player.x += overlap;
+			}
+		});
+	}
+
+	// Helper method to check player zone
+	private checkZone(player_x: number, player_y: number, player_radius?: number): number {
+		let zone_id: number = -1;
+		if (!player_radius) {
+			player_radius = 0;
+		}
+		this.state.zones.forEach((zone) => {
+			if (Math.hypot(Math.abs(player_x - zone.x), Math.abs(player_y - zone.y)) <= (zone.radius + player_radius)) {
+				zone_id = zone.id;
+			}
+		});
+
+		return zone_id;
+	}
+
+    // Helper method to create zone
+    private makeZone(id: number, x: number, y: number, radius: number): Zone {
+        const zone = new Zone();
+        zone.id = id;
+		zone.x = x;
+		zone.y = y;
+		zone.radius = radius;
+
+		if (id < config.zones.colors.length) {
+			zone.color = config.zones.colors[id];
+		} else {
+			zone.color = '#ffffff';
+		}
+        return zone;
+		
+    }
+
+	// Start the round timer
+	private startRoundTimer() {
+		// Always reset the timer value
+		this.state.roundTime = this.roundDuration;
+
+		// If timer is already running, just reset the value and return
+		if (this.roundTimer) {
+			return;
+		}
+
+		console.log(`Round timer initialized: ${this.roundDuration} seconds`);
+
+		// Create the countdown interval
+		this.roundTimer = this.clock.setInterval(() => {
+			// Only countdown if phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE) {
+				return;
+			}
+
+			this.state.roundTime -= 1;
+
+			if (this.state.roundTime <= 0) {
+				console.log('Round ended! Resetting room...');
+				this.roundTimer.clear();
+				this.roundTimer = null; // Clear the reference so it can be restarted
+				this.endRound();
+			}
+		}, config.round.timerInterval);
+	}
+
+	// Reset the room to initial state
+	private resetRoom() {
+		console.log('Resetting room state...');
+
+		// Reset all players to non-overlapping spawn positions and clear their state
+		const players = Array.from(this.state.players.values());
+		const spawnPositions = this.computeSpawnPositions(players.length);
+
+		players.forEach((player, index) => {
+			player.x = spawnPositions[index].x;
+			player.y = spawnPositions[index].y;
+			player.emote = '';
+			player.zone = -1;
+            player.ready = false;
+			player.roundPoints = 0;
+		})
+
+		console.log('Room reset complete. Waiting for host to start next round.');
+		// this.state.phase = Phase.END;
+		console.log(`Current phase: ${this.state.phase}`);
+	}
+
+	// Spread `count` players evenly around a circle centered on the world's start position, so
+	// they never spawn on top of each other
+	private computeSpawnPositions(count: number): { x: number; y: number }[] {
+		const positions: { x: number; y: number }[] = [];
+
+		for (let i = 0; i < count; i++) {
+			const angle = (2 * Math.PI * i) / count;
+			positions.push({
+				x: config.player.startX + config.player.spawnRadius * Math.cos(angle),
+				y: config.player.startY + config.player.spawnRadius * Math.sin(angle),
+			});
+		}
+
+		return positions;
+	}
+
+    private selectAware() {
+
+		// Increase aware proportion linearly each round
+		const currentAwareProportion = (
+			((config.game.awareMax - config.game.awareMin) / (config.game.rounds - 1)) 
+			* (this.state.roundNumber)) 
+			+ config.game.awareMin;
+
+		const playerArray = Array.from(this.state.players.values());
+		const targetCount = Math.ceil(playerArray.length * currentAwareProportion);
+
+        // Shuffle array using Fisher-Yates
+        for (let i = playerArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [playerArray[i], playerArray[j]] = [playerArray[j], playerArray[i]];
+        }
+		
+		// If existing aware players should remain aware, sort array so they are at the front of the array
+		if (!config.game.randomAware) {
+			playerArray.sort(
+				(a, b) => {
+					if (a.aware && !b.aware) return -1;
+					if (!a.aware && b.aware) return 1;
+					return 0;
+				}
+			);
+		}
+
+		// Make first n players aware (includes all previously aware players if not using randomly selected players each round)
+		playerArray.forEach((player, index) => {
+			player.aware = index < targetCount;
+		});
+    }
+
+    private scorePlayers() {
+        // Use the current scoring strategy to calculate scores
+        const result = this.currentScoringStrategy.calculate(this.state.players, this.state);
+
+        // Apply individual scores to players
+        result.individualScores.forEach((points, sessionId) => {
+            const player = this.state.players.get(sessionId);
+            if (player) {
+                player.points += points;
+				player.roundPoints = points;
+            }
+        });
+
+        // Update collective score if the strategy provides one
+        if (result.collectiveScore !== undefined) {
+            this.state.collectiveScore += result.collectiveScore;
+        }
+    }
+
+    // Run this function when the round timer ends
+    private endRound() {
+
+        // Determine round scores, give winning players points
+        this.scorePlayers();
+
+        // Set room phase to SCOREBOARD to display the scoreboard
+        this.state.phase = Phase.SCOREBOARD;
+
+        // Wait for scoreboard duration before transitioning to next round
+        this.clock.setTimeout(() => {
+            // Set room phase to WAITING, preventing the room counter from starting
+            this.state.phase = Phase.WAITING;
+
+            // Reset player variables, choose new target zone, update aware
+            this.resetRoom();
+
+            // Start next round
+            this.startRound();
+        }, config.round.scoreboardDuration);
+    }
+
+    // Run this function at the end of end round, separate logic for starting new game
+    private startRound() {
+		if (this.state.roundNumber >= this.lastRound - 1) {
+			console.log('Final round');
+			this.state.phase = Phase.END;
+			// this.endGame();
+			return;
+		}
+
+		// Increment round count
+		this.state.roundNumber += 1;
+		console.log('Current round: ', this.state.roundNumber);
+
+        // Select aware players
+        this.selectAware();
+
+        // Rounds after the first start on a fixed countdown rather than waiting for players to ready up
+        this.startRoundCountdown();
+
+        // Start round and timer
+        this.startRoundTimer();
+
+		// Set new target zone
+		this.state.targetZone = randomInt(4);
+    }
+
+    async checkReady(): Promise<boolean> {
+        let allReady: boolean = true;
+        this.state.players.forEach((player) => {
+            allReady = allReady && player.ready
+        });
+        return allReady;
+    }
+
+    private async waitForPlayerReady() {
+        // Create promise that resolves when all players are ready
+        const readyCheckPromise = new Promise<void>((resolve) => {
+            const readyCheckInterval = this.clock.setInterval(async () => {
+                const allReady = await this.checkReady();
+                const hasPlayers = this.state.players.size > 0;
+                if (allReady && hasPlayers) {
+                    readyCheckInterval.clear();
+                    resolve();
+                }
+            }, 500);
+        });
+
+        // Create promise that resolves after 10 seconds
+        const timeoutPromise = new Promise<void>((resolve) => {
+            this.clock.setTimeout(() => {
+                console.log('Ready timeout expired (10s), starting round anyway');
+                resolve();
+            }, config.round.readyTimeout);
+        });
+
+		console.log('Awaiting ready promises');
+
+        // Wait for whichever happens first: all ready or timeout
+        await Promise.race([readyCheckPromise, timeoutPromise]);
+		console.log('Promise resolved');
+
+        // Reset ready state and unlock players
+        this.state.players.forEach((player) => {
+            player.ready = false;
+        });
+        this.playerLock = false;
+        this.state.phase = Phase.ACTIVE;
+    }
+
+    // Start a fixed countdown before rounds after the first begin (no ready-up required)
+    private startRoundCountdown() {
+        this.state.phase = Phase.COUNTDOWN;
+        this.state.countdownTime = config.round.countdownDuration;
+        console.log(`Current phase: ${this.state.phase}`);
+
+        const countdownInterval = this.clock.setInterval(() => {
+            this.state.countdownTime -= 1;
+
+            if (this.state.countdownTime <= 0) {
+                countdownInterval.clear();
+                this.playerLock = false;
+                this.state.phase = Phase.ACTIVE;
+                console.log(`Current phase: ${this.state.phase}`);
+            }
+        }, 1000);
+    }
+
+    private checkPlayerCount() {
+        // Dispose room if all players have left
+        if (this.clients.length === 0) {
+            console.log('All players left, disposing room...');
+            this.disconnect();
+            return;
+        }
+
+        if (this.state.players.size < config.game.minClients && (this.state.phase === Phase.WAITING || this.state.phase === Phase.LOBBY)) {
+            this.playerLock = true;
+        }
+        else {
+            this.playerLock = false;
+        }
+    }
+
+	private registerMessageListeners() {
+
+        // Ready all players for debugging from Colyseus playground
+        this.onMessage('ready-all', (client, data) => {
+            this.state.players.forEach((player) => {
+                player.ready = true;
+            });
+        });
+
+		// Called every time this room receives a "move" message
+		this.onMessage('move', (client, data) => {
+			const player = this.state.players.get(client.sessionId);
+
+			if (!player) {
+				console.error(`Player not found for session ${client.sessionId}`);
+				return;
+			}
+
+			// Only allow movement when phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE || this.playerLock) {
+				return;
+			}
+
+			// Reject malformed/non-finite input (also guards against NaN/Infinity slipping past distance checks)
+			const reqX = Number(data?.x);
+			const reqY = Number(data?.y);
+			if (!Number.isFinite(reqX) || !Number.isFinite(reqY)) {
+				return;
+			}
+
+			const [moveX, moveY] = this.spendMovementBudget(client.sessionId, reqX, reqY);
+
+			player.x += moveX;
+			player.y += moveY;
+
+			// Track actual (Euclidean) distance moved, not the raw requested delta
+			player.distance += Math.trunc(Math.hypot(moveX, moveY));
+
+			// Clamp player position to world bounds (accounting for player radius)
+			const minX = player.radius;
+			const maxX = config.world.width - player.radius;
+			const minY = player.radius;
+			const maxY = config.world.height - player.radius;
+
+			player.x = Math.max(minX, Math.min(maxX, player.x));
+			player.y = Math.max(minY, Math.min(maxY, player.y));
+
+			// Push the player out of any other player they've moved into, so they can never overlap
+			this.resolvePlayerOverlap(player, client.sessionId);
+
+			// Re-clamp to world bounds in case overlap resolution pushed the player back out
+			player.x = Math.max(minX, Math.min(maxX, player.x));
+			player.y = Math.max(minY, Math.min(maxY, player.y));
+
+            player.zone = this.checkZone(player.x, player.y, player.radius);
+		});
+
+		// // Called when client sends position update (for collision-based movements)
+		// this.onMessage('position', (client, data) => {
+		// 	const player = this.state.players.get(client.sessionId);
+
+		// 	if (!player) {
+		// 		console.error(`Player not found for session ${client.sessionId}`);
+		// 		return;
+		// 	}
+
+		// 	// Only allow movement when round is active
+		// 	// if (!this.state.roundActive) {
+		// 	// 	return;
+		// 	// }
+
+		// 	player.x = data.x;
+		// 	player.y = data.y;
+        //     player.zone = this.checkZone(player.x, player.y);
+		// });
+
+		// Called when client sends emote update
+		this.onMessage('emote', (client, data) => {
+			const player = this.state.players.get(client.sessionId);
+
+			if (!player) {
+				console.error(`Player not found for session ${client.sessionId}`);
+				return;
+			}
+
+            // Only allow emotes when phase is ACTIVE
+			if (this.state.phase !== Phase.ACTIVE || this.playerLock) {
+				return;
+			}
+
+			// Increment the emote count when the emote changes
+			if (player.emote != data.emote) {
+				player.emoteCount += 1;
+			}
+
+			player.emote = data.emote;
+
+			// Check if this player already has an active emote timeout
+			const existingTimeout = this.emoteTimeouts.get(client.sessionId);
+
+			if (existingTimeout) {
+				// Reset the existing timeout
+				existingTimeout.reset();
+			} else {
+				// Create new timeout for this player
+				const emoteTimeout = this.clock.setTimeout(() => {
+					player.emote = "";
+					this.emoteTimeouts.delete(client.sessionId);
+				}, config.player.emoteTimeout);
+
+				this.emoteTimeouts.set(client.sessionId, emoteTimeout);
+			}
+		});
+
+        this.onMessage('ready', (client, data) => {
+            const player = this.state.players.get(client.sessionId);
+
+            if (player) {
+                player.ready = true;
+            }
+
+            // Calculate ready count
+            const readyCount = Array.from(this.state.players.values()).filter(p => p.ready).length;
+            const totalCount = this.state.players.size;
+
+            // Broadcast to ALL clients including the sender
+            this.broadcast("ready-count", { ready: readyCount, total: totalCount });
+        });
+	}
+
+	// Create four zones around the center of the screen
+	private initializeZones() {
+		const centerX = config.world.width / 2;
+		const centerY = config.world.height / 2;
+		const zoneRadius = config.zones.radius;
+		const offset = config.zones.offsetFromCenter;
+
+        const leftZone = this.makeZone(0, centerX - offset, centerY, zoneRadius);
+        this.state.zones.set('left', leftZone);
+
+        const rightZone = this.makeZone(1, centerX + offset, centerY, zoneRadius);
+        this.state.zones.set('right', rightZone);
+
+        const topZone = this.makeZone(2, centerX, centerY + offset, zoneRadius);
+        this.state.zones.set('top', topZone);
+
+        const bottomZone = this.makeZone(3, centerX, centerY - offset, zoneRadius);
+        this.state.zones.set('bottom', bottomZone);
+	}
+
+	// Set up periodic snapshot logging
+	private initializeLogger() {
+		this.clock.setInterval(() => {
+			if (this.state.phase === Phase.ACTIVE){ // Only log snapshot if phase is ACTIVE
+				this.logger.logSnapshot({
+					timestamp: this.clock.currentTime, // Colyseus simulation time
+					serverTime: Date.now(), // Real-world timestamp
+					roomId: this.roomId,
+					targetZone: this.state.targetZone?.toString(),
+					players: [...this.state.players.entries()].map(([sessionId, player]) => ({
+						id: sessionId,
+						x: player.x,
+						y: player.y,
+						aware: player.aware,
+						name: player.name,
+						color: player.color,
+						textColor: player.textColor,
+						emote: player.emote,
+						zone: player.zone,
+						points: player.points,
+						ready: player.ready
+					})),
+				});
+			}
+		}, config.logging.snapshotInterval);
+	}
+
+	// Called before each state patch is broadcast to clients (at patch rate, default ~20/sec)
+	onBeforePatch() {
+		if (this.state.phase === Phase.ACTIVE) { // Only log snapshot if phase is ACTIVE
+			this.logger.logSnapshot({
+				timestamp: this.clock.currentTime, // Colyseus simulation time
+				serverTime: Date.now(), // Real-world timestamp
+				roomId: this.roomId,
+				targetZone: this.state.targetZone?.toString(),
+				players: [...this.state.players.entries()].map(([sessionId, player]) => ({
+					id: sessionId,
+					x: Math.round(player.x),
+					y: Math.round(player.y),
+					aware: player.aware,
+					name: player.name,
+					color: player.color,
+					textColor: player.textColor,
+					emote: player.emote,
+					zone: player.zone,
+					points: player.points,
+					ready: player.ready
+				})),
+			});
+		}
+	}
+
+	// Call once minimum players connect, start the game
+	private async transitionFromLobby() {
+		// this.initializeLogger(); // Start logger
+		this.state.phase = Phase.INSTRUCTION;
+
+		// Wait 10 seconds in instruction phase before continuing
+		await new Promise<void>((resolve) => {
+			this.clock.setTimeout(() => {
+				resolve();
+			}, 20000);
+		});
+
+		this.state.phase = Phase.WAITING;
+		this.state.targetZone = randomInt(4); // Set random target zone
+		this.startRoundTimer(); // Start round timer
+		this.resetRoom();
+		this.waitForPlayerReady(); // Wait for all players to ready before starting round
+		this.selectAware();
+	}
+}

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Flocker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .button-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .admin-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: white;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .admin-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .admin-button:active {
+            transform: translateY(0);
+        }
+
+        .button-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .button-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .button-description {
+            font-size: 12px;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .button-icon {
+            font-size: 20px;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 30px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .info-box strong {
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Panel</h1>
+        <p class="subtitle">Access various backend endpoints and tools</p>
+
+        <div class="button-container">
+            <a href="/flocker/admin/rooms" class="admin-button">
+                <div class="button-content">
+                    <span class="button-title">Rooms</span>
+                    <span class="button-description">View active rooms and join one as a spectator</span>
+                </div>
+                <span class="button-icon">→</span>
+            </a>
+
+            <a href="/flocker/admin/playground" class="admin-button">
+                <div class="button-content">
+                    <span class="button-title">Playground</span>
+                    <span class="button-description">Interactive Colyseus playground interface</span>
+                </div>
+                <span class="button-icon">→</span>
+            </a>
+
+            <a href="/flocker/admin/data" class="admin-button">
+                <div class="button-content">
+                    <span class="button-title">Data Extraction</span>
+                    <span class="button-description">Export snapshot data by date range</span>
+                </div>
+                <span class="button-icon">→</span>
+            </a>
+
+            <a href="/flocker/admin/clients" class="admin-button">
+                <div class="button-content">
+                    <span class="button-title">Clients Display</span>
+                    <span class="button-description">View real-time connected client data</span>
+                </div>
+                <span class="button-icon">→</span>
+            </a>
+
+            <a href="/flocker/admin/monitor" class="admin-button">
+                <div class="button-content">
+                    <span class="button-title">Server Monitor</span>
+                    <span class="button-description">Monitor Colyseus server status and rooms</span>
+                </div>
+                <span class="button-icon">→</span>
+            </a>
+        </div>
+
+        <div class="info-box">
+            <strong>Note:</strong> All endpoints are part of the Flocker backend administration system. Use these tools to manage and monitor your game server.
+        </div>
+    </div>
+</body>
+</html>
