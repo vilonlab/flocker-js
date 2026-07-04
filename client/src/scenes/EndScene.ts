@@ -100,13 +100,30 @@ export default class EndScene extends Phaser.Scene {
             this.scoreboardContainer.add(collectiveText);
         }
 
-        // Create title
-        const room_id = this.add.text(centerX, startY + 100, `Room ID: ${this.room.roomId}`, {
+        // Create room ID display, clickable to copy the room ID to the clipboard
+        const room_id = this.add.text(centerX, startY + 100, `Room ID: ${this.room.roomId}  (click to copy)`, {
             fontSize: '24px',
             color: '#000000',
             fontStyle: 'bold'
         });
         room_id.setOrigin(0.5);
+        room_id.setInteractive({ useHandCursor: true });
+        room_id.on('pointerdown', () => {
+            navigator.clipboard.writeText(this.room.roomId).then(() => {
+                room_id.setText('Copied!');
+                this.time.delayedCall(1200, () => {
+                    room_id.setText(`Room ID: ${this.room.roomId}  (click to copy)`);
+                });
+            }).catch((err) => {
+                console.error('Failed to copy room ID:', err);
+            });
+        });
+        room_id.on('pointerover', () => {
+            room_id.setColor('#0717ff');
+        });
+        room_id.on('pointerout', () => {
+            room_id.setColor('#000000');
+        });
         this.scoreboardContainer.add(room_id);
 
 
