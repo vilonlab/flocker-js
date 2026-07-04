@@ -64,7 +64,7 @@ export default class EndScene extends Phaser.Scene {
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
         const boardWidth = 500;
-        const boardHeight = this.room.state.isCollectiveScoring ? 100 : 60 + players.length * 50;
+        const boardHeight = this.room.state.isCollectiveScoring ? 140 : 100 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
         // Create background
@@ -99,6 +99,16 @@ export default class EndScene extends Phaser.Scene {
             collectiveText.setOrigin(0.5);
             this.scoreboardContainer.add(collectiveText);
         }
+
+        // Create title
+        const room_id = this.add.text(centerX, startY + 100, 'Room ID: ${room.roomId}', {
+            fontSize: '32px',
+            color: '#000000',
+            fontStyle: 'bold'
+        });
+        title.setOrigin(0.5);
+        this.scoreboardContainer.add(title);
+
 
         // Create player rows
         var rowY = 0;
