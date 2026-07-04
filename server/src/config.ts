@@ -62,7 +62,7 @@ export const config = {
     maxClients: 2,
     minClients: 2,
     maxSpectators: 10, // additional connections (beyond maxClients) reserved for admin spectators
-    rounds: 5,
+    rounds: 2,
     randomAware: false, // randomly assign new aware players each round
     awareMin: 0.1, // starting proportion of aware players
     awareMax: 1.0 // ending proportion of aware players 

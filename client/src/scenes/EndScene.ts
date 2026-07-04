@@ -101,8 +101,8 @@ export default class EndScene extends Phaser.Scene {
         }
 
         // Create title
-        const room_id = this.add.text(centerX, startY + 100, 'Room ID: ${room.roomId}', {
-            fontSize: '32px',
+        const room_id = this.add.text(centerX, startY + 100, `Room ID: ${this.room.roomId}`, {
+            fontSize: '24px',
             color: '#000000',
             fontStyle: 'bold'
         });
