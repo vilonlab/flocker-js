@@ -63,7 +63,7 @@ export default class EndScene extends Phaser.Scene {
         // Scoreboard dimensions and positioning
         const centerX = config.game.width / 2;
         const centerY = config.game.height / 2;
-        const boardWidth = 500;
+        const boardWidth = 600;
         const boardHeight = this.room.state.isCollectiveScoring ? 140 : 100 + players.length * 50;
         const startY = centerY - boardHeight / 2;
 
